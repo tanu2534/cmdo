@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/tanu2534/cmdo/database"
@@ -12,22 +14,30 @@ var logCmd = &cobra.Command{
 	Aliases: []string{"logs"},
 	Short:   "Add log in the server",
 	Long:    "log command adds the log in the server additional flags are --command, --exit-code, --pwd",
-	// Args:    cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		// fmt.Printf("Addition of %s and %s = %s.\n\n", args[0], args[1], Add(args[0], args[1]))
-		// fmt.Println(cmd)
 		command, _ := cmd.Flags().GetString("command")
 		exitCode, _ := cmd.Flags().GetString("exit-code")
 		pwd, _ := cmd.Flags().GetString("pwd")
 
 		if command != "" && pwd != "" {
+			// ✅ Use global DB path instead of ./cmdo.db
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Println("Error getting home directory:", err)
+				return
+			}
 
-			database.InitDB("./cmdo.db")
+			// Create .cmdo directory if it doesn't exist
+			cmdoDir := filepath.Join(homeDir, ".cmdo")
+			os.MkdirAll(cmdoDir, 0755)
+
+			dbPath := filepath.Join(cmdoDir, "cmdo.db")
+
+			database.InitDB(dbPath)
+			defer database.DB.Close()
 
 			fmt.Println(command, exitCode, pwd)
 			database.InsertCmd(command, exitCode, pwd)
-
-			defer database.DB.Close()
 		}
 	},
 }

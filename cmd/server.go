@@ -1,16 +1,22 @@
 package cmd
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/tanu2534/cmdo/database"
 )
+
+//go:embed server/index.html
+var indexHTML embed.FS
 
 // Command struct for JSON response
 type CommandJSON struct {
@@ -28,7 +34,20 @@ var serveCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		port, _ := cmd.Flags().GetString("port")
 
-		database.InitDB("./cmdo.db")
+		// Use global DB path
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal("Error getting home directory:", err)
+		}
+		dbPath := filepath.Join(homeDir, ".cmdo", "cmdo.db")
+
+		// Check if DB exists
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+			fmt.Println("No database found at:", dbPath)
+			fmt.Println("Run some commands first, or use 'cmdo setup' to install hooks")
+		}
+
+		database.InitDB(dbPath)
 		defer database.DB.Close()
 
 		// API endpoints
@@ -39,17 +58,30 @@ var serveCmd = &cobra.Command{
 		// Serve HTML page
 		http.HandleFunc("/", indexHandler)
 
-		fmt.Printf("🚀 CMDO Server running at http://localhost:%s\n", port)
+		fmt.Printf("CMDO Server running at http://localhost:%s\n", port)
+		fmt.Printf("Using database: %s\n", dbPath)
+		fmt.Println("Press Ctrl+C to stop")
 		log.Fatal(http.ListenAndServe(":"+port, nil))
 	},
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("server/index.html")
+	// Read embedded file
+	content, err := indexHTML.ReadFile("server/index.html")
 	if err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
+		http.Error(w, "Template not found", http.StatusInternalServerError)
+		log.Println("Error reading template:", err)
 		return
 	}
+
+	// Parse template from embedded content
+	tmpl, err := template.New("index").Parse(string(content))
+	if err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+		log.Println("Error parsing template:", err)
+		return
+	}
+
 	tmpl.Execute(w, nil)
 }
 

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -11,6 +13,15 @@ import (
 )
 
 var DB *sql.DB
+var dbPath string
+
+func GetGlobalDBPath() string {
+	if dbPath == "" {
+		homeDir, _ := os.UserHomeDir()
+		dbPath = filepath.Join(homeDir, ".cmdo", "cmdo.db")
+	}
+	return dbPath
+}
 
 type Command struct {
 	ID        int
@@ -43,13 +54,13 @@ func GetCommandsGrouped() (map[string][]Command, error) {
 	// DB check karo
 	if DB == nil {
 		log.Println("DB is nil, reopening...")
-		InitDB("./cmdo.db") // dbPath ko global variable me store karna hoga InitDB call ke time
+		InitDB(GetGlobalDBPath())
 	}
 
 	// Agar DB closed hai to bhi handle karo
 	if err := DB.Ping(); err != nil {
 		log.Println("DB was closed, reopening...")
-		InitDB("./cmdo.db")
+		InitDB(GetGlobalDBPath())
 	}
 
 	rows, err := DB.Query(`SELECT id, command, directory, exit_code, timestamp 
@@ -75,10 +86,23 @@ func GetCommandsGrouped() (map[string][]Command, error) {
 }
 
 func InitDB(path string) {
+	dbPath = path
+
+	// ✅ Create directory if it doesn't exist
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Fatalf("Error creating database directory: %v", err)
+	}
+
 	var err error
 	DB, err = sql.Open("sqlite3", path)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// Test connection
+	if err = DB.Ping(); err != nil {
+		log.Fatalf("Error connecting to database: %v", err)
 	}
 
 	sqlStmt := `

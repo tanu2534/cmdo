@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+
 	// "text/template"
 
 	// "log"
@@ -14,7 +14,7 @@ import (
 
 func main() {
 
-	fmt.Println("ddddd")
+	// fmt.Println("Welcome to CMDO v0.1.0")
 	cmd.Execute()
 	// // database.InitDB("./cmdo.db")
 	// // defer database.DB.Close()

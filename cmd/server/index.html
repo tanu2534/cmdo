@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDO - Command History Logger</title>
+  <meta name="description" content="Track all your terminal commands across folders with a beautiful dark-themed interface">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Tailwind Config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: 'hsl(220, 13%, 4%)',
+            foreground: 'hsl(210, 40%, 98%)',
+            card: 'hsl(220, 13%, 7%)',
+            'card-foreground': 'hsl(210, 40%, 98%)',
+            primary: 'hsl(217, 91%, 60%)',
+            'primary-foreground': 'hsl(220, 13%, 4%)',
+            secondary: 'hsl(220, 13%, 13%)',
+            'secondary-foreground': 'hsl(210, 40%, 98%)',
+            muted: 'hsl(220, 13%, 13%)',
+            'muted-foreground': 'hsl(217, 10%, 60%)',
+            destructive: 'hsl(0, 84%, 60%)',
+            'destructive-foreground': 'hsl(210, 40%, 98%)',
+            border: 'hsl(220, 13%, 18%)',
+            success: 'hsl(142, 76%, 36%)',
+            'code-bg': 'hsl(220, 13%, 10%)',
+            'hover-bg': 'hsl(220, 13%, 11%)',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+      background-color: hsl(220, 13%, 4%);
+      color: hsl(210, 40%, 98%);
+    }
+    
+    code, pre {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: hsl(220, 13%, 13%);
+      color: hsl(210, 40%, 98%);
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 1px solid hsl(220, 13%, 18%);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+    
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .toast.success {
+      border-left: 3px solid hsl(142, 76%, 36%);
+    }
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      outline: none;
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .btn-outline {
+      background: transparent;
+      border: 1px solid hsl(220, 13%, 18%);
+      color: hsl(210, 40%, 98%);
+    }
+    
+    .btn-outline:hover:not(:disabled) {
+      background: hsl(217, 91%, 60%, 0.1);
+      color: hsl(217, 91%, 60%);
+    }
+    
+    .btn-destructive {
+      background: hsl(0, 84%, 60%);
+      color: hsl(210, 40%, 98%);
+    }
+    
+    .btn-destructive:hover:not(:disabled) {
+      background: hsl(0, 84%, 50%);
+    }
+    
+    .btn-ghost {
+      background: transparent;
+      color: hsl(210, 40%, 98%);
+    }
+    
+    .btn-ghost:hover {
+      background: hsl(220, 13%, 11%);
+    }
+    
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    .badge-success {
+      background: hsl(142, 76%, 36%, 0.2);
+      color: hsl(142, 76%, 36%);
+    }
+    
+    .badge-error {
+      background: hsl(0, 84%, 60%, 0.2);
+      color: hsl(0, 84%, 60%);
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="min-h-screen" style="background-color: hsl(220, 13%, 4%);">
+    <!-- Header -->
+    <header class="border-b sticky top-0 z-10 backdrop-blur-sm" style="border-color: hsl(220, 13%, 18%); background-color: hsl(220, 13%, 7%, 0.5);">
+      <div class="container mx-auto px-6 py-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="hsl(217, 91%, 60%)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" x2="20" y1="19" y2="19"></line>
+            </svg>
+            <div>
+              <h1 class="text-3xl font-bold tracking-tight">CMDO</h1>
+              <p class="text-sm mt-0.5" style="color: hsl(217, 10%, 60%);">Command History Logger</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <button id="refreshBtn" class="btn btn-outline">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+                <path d="M16 16h5v5"></path>
+              </svg>
+              Refresh
+            </button>
+            <button id="clearAllBtn" class="btn btn-destructive">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              </svg>
+              Clear All
+            </button>
+          </div>
+        </div>
+        <p class="text-sm mb-4" style="color: hsl(217, 10%, 60%);">Track all your terminal commands across folders</p>
+        
+        <!-- Search Bar -->
+        <div class="relative max-w-xl">
+          <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" style="color: hsl(217, 10%, 60%);" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.3-4.3"></path>
+          </svg>
+          <input 
+            type="text" 
+            id="searchInput" 
+            placeholder="Search commands or folders..." 
+            class="w-full pl-10 pr-4 py-2 rounded-md text-sm"
+            style="background: hsl(220, 13%, 13%); border: 1px solid hsl(220, 13%, 18%); color: hsl(210, 40%, 98%);"
+          />
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <div id="toastContainer"></div>
+
+  <script>
+    // Mock data generation
+
+   
+ 
+    // Time formatting
+ function formatTimestamp(date) {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return 'just now';
+
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+
+  // Use local date string for older timestamps
+  const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+  return date.toLocaleString('en-US', options);
+}
+   // Toast notification
+    function showToast(message, type = 'success') {
+      const toastContainer = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      toastContainer.appendChild(toast);
+
+      setTimeout(() => toast.classList.add('show'), 10);
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // App state
+   let commands = [];
+    let searchQuery = '';
+    let expandedFolders = {};
+
+    async function fetchCommands() {
+      try {
+        const response = await fetch('/api/commands');
+        const data = await response.json();
+        commands = data.map(cmd => ({
+          ...cmd,
+          timestamp: new Date(cmd.timestamp)
+        }));
+        render();
+      } catch (error) {
+        console.error('Error fetching commands:', error);
+        showToast('Failed to load commands', 'error');
+      }
+    }
+
+
+
+    // Copy to clipboard
+
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard!');
+      });
+    }
+
+    // Delete command
+    async function deleteCommand(id) {
+      try {
+        const response = await fetch('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+
+        if (response.ok) {
+          commands = commands.filter(cmd => cmd.id !== id);
+          showToast('Command deleted');
+          render();
+        }
+      } catch (error) {
+        showToast('Failed to delete', 'error');
+      }
+    }
+
+     async function clearAllCommands() {
+      if (!confirm('Are you sure you want to delete all commands?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/clear', {
+          method: 'POST'
+        });
+
+        if (response.ok) {
+          commands = [];
+          expandedFolders = {};
+          showToast('All commands cleared');
+          render();
+        }
+      } catch (error) {
+        showToast('Failed to clear commands', 'error');
+      }
+    }
+    // Filter commands
+    function getFilteredCommands() {
+      if (!searchQuery) return commands;
+      return commands.filter(cmd => 
+        cmd.command.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        cmd.folder.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Group by folder
+    function getFolderGroups() {
+      const filtered = getFilteredCommands();
+      const groups = {};
+      
+      filtered.forEach(cmd => {
+        if (!groups[cmd.folder]) {
+          groups[cmd.folder] = [];
+        }
+        groups[cmd.folder].push(cmd);
+      });
+
+      return Object.entries(groups).map(([folder, commands]) => ({
+        folder,
+        commands,
+      }));
+    }
+
+    // Render command row
+    function renderCommandRow(command) {
+      const exitCodeBadge = command.exitCode === 0
+        ? `<span class="badge badge-success">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            ${command.exitCode}
+          </span>`
+        : `<span class="badge badge-error">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" x2="9" y1="9" y2="15"></line>
+              <line x1="9" x2="15" y1="9" y2="15"></line>
+            </svg>
+            ${command.exitCode}
+          </span>`;
+
+      return `
+        <tr class="border-b hover:bg-hover-bg transition-colors" style="border-color: hsl(220, 13%, 18%);">
+          <td class="py-3 px-4">
+            <code class="text-sm px-2 py-1 rounded" style="background: hsl(220, 13%, 10%); color: hsl(210, 40%, 98%);">
+              ${command.command}
+            </code>
+          </td>
+          <td class="py-3 px-4 text-center">
+            ${exitCodeBadge}
+          </td>
+          <td class="py-3 px-4 text-sm" style="color: hsl(217, 10%, 60%);">
+            ${formatTimestamp(command.timestamp)}
+          </td>
+          <td class="py-3 px-4">
+            <div class="flex items-center gap-2 justify-end">
+              <button class="btn btn-ghost p-2" onclick="copyToClipboard('${command.command.replace(/'/g, "\\'")}')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                </svg>
+              </button>
+              <button class="btn btn-ghost p-2" style="color: hsl(0, 84%, 60%);" onclick="deleteCommand('${command.id}')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
+    // Render folder section
+    function renderFolderSection(folder, cmds) {
+      const isExpanded = expandedFolders[folder] !== false;
+      const chevronIcon = isExpanded
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m6 9 6 6 6-6"></path>
+          </svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"></path>
+          </svg>`;
+
+      return `
+        <div class="rounded-lg overflow-hidden border" style="border-color: hsl(220, 13%, 18%); background: hsl(220, 13%, 7%);">
+          <div class="flex items-center justify-between p-4 border-b" style="border-color: hsl(220, 13%, 18%); background: hsl(220, 13%, 13%, 0.5);">
+            <div class="flex items-center gap-3 flex-1">
+              <button class="btn btn-ghost p-2" onclick="toggleFolder('${folder}')">
+                ${chevronIcon}
+              </button>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(217, 91%, 60%)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path>
+              </svg>
+              <span class="font-mono text-sm">${folder}</span>
+              <span class="text-xs" style="color: hsl(217, 10%, 60%);">
+                (${cmds.length} command${cmds.length !== 1 ? 's' : ''})
+              </span>
+            </div>
+            <button class="btn btn-outline" onclick="copyAllCommands('${folder}')">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+              </svg>
+              Copy All
+            </button>
+          </div>
+
+          ${isExpanded ? `
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead style="background: hsl(220, 13%, 13%, 0.3);">
+                  <tr class="border-b" style="border-color: hsl(220, 13%, 18%);">
+                    <th class="py-3 px-4 text-left text-xs font-medium uppercase tracking-wider" style="color: hsl(217, 10%, 60%);">Command</th>
+                    <th class="py-3 px-4 text-center text-xs font-medium uppercase tracking-wider" style="color: hsl(217, 10%, 60%);">Exit Code</th>
+                    <th class="py-3 px-4 text-left text-xs font-medium uppercase tracking-wider" style="color: hsl(217, 10%, 60%);">Timestamp</th>
+                    <th class="py-3 px-4 text-right text-xs font-medium uppercase tracking-wider" style="color: hsl(217, 10%, 60%);">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${cmds.map(cmd => renderCommandRow(cmd)).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    // Toggle folder
+    function toggleFolder(folder) {
+      expandedFolders[folder] = !expandedFolders[folder];
+      render();
+    }
+
+    // Copy all commands
+    function copyAllCommands(folder) {
+      const folderCommands = commands.filter(cmd => cmd.folder === folder);
+      const allCommands = folderCommands.map(cmd => cmd.command).join('\n');
+      copyToClipboard(allCommands);
+      showToast(`Copied ${folderCommands.length} commands!`);
+    }
+
+    // Main render
+    function render() {
+      const content = document.getElementById('content');
+      const folderGroups = getFolderGroups();
+
+      if (folderGroups.length === 0) {
+        content.innerHTML = `
+          <div class="flex flex-col items-center justify-center py-16 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="hsl(217, 10%, 60%)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" x2="20" y1="19" y2="19"></line>
+            </svg>
+            <h2 class="text-xl font-semibold mt-4 mb-2">No commands found</h2>
+            <p style="color: hsl(217, 10%, 60%);">
+              ${searchQuery ? "Try a different search term" : "Click refresh to load command history"}
+            </p>
+          </div>
+        `;
+      } else {
+        content.innerHTML = `
+          <div class="space-y-6">
+            ${folderGroups.map(({ folder, commands }) => renderFolderSection(folder, commands)).join('')}
+          </div>
+        `;
+      }
+
+      // Update clear button state
+      document.getElementById('clearAllBtn').disabled = commands.length === 0;
+    }
+
+    // Event listeners
+     document.getElementById('refreshBtn').addEventListener('click', () => {
+      expandedFolders = {};
+      fetchCommands();
+      showToast('Refreshed command history');
+    });
+
+   document.getElementById('clearAllBtn').addEventListener('click', () => {
+      clearAllCommands();
+    });
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      render();
+    });
+    // Initial render
+    fetchCommands();
+  </script>
+</body>
+</html>
