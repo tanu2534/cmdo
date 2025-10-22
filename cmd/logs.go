@@ -20,7 +20,7 @@ var logCmd = &cobra.Command{
 		pwd, _ := cmd.Flags().GetString("pwd")
 
 		if command != "" && pwd != "" {
-			// ✅ Use global DB path instead of ./cmdo.db
+			// Use global DB path
 			homeDir, err := os.UserHomeDir()
 			if err != nil {
 				fmt.Println("Error getting home directory:", err)
@@ -36,10 +36,40 @@ var logCmd = &cobra.Command{
 			database.InitDB(dbPath)
 			defer database.DB.Close()
 
-			fmt.Println(command, exitCode, pwd)
+			// Insert the command
 			database.InsertCmd(command, exitCode, pwd)
+
+			// Auto-cleanup: Keep last 1000 commands OR 30 days (whichever is more)
+			cleanupOldCommands(1000, 30)
 		}
 	},
+}
+
+// cleanupOldCommands removes old entries based on count and age limits
+// Keeps last maxCount commands OR commands from last maxDays (whichever gives more commands)
+func cleanupOldCommands(maxCount int, maxDays int) {
+	// Strategy: Delete commands that are BOTH:
+	// 1. Not in the most recent maxCount commands
+	// 2. Older than maxDays
+
+	// This ensures we keep at least maxCount recent commands
+	// AND we keep all commands from the last maxDays even if > maxCount
+
+	_, err := database.DB.Exec(`
+		DELETE FROM commands 
+		WHERE id NOT IN (
+			SELECT id FROM commands 
+			ORDER BY timestamp DESC 
+			LIMIT ?
+		) 
+		AND timestamp < datetime('now', '-' || ? || ' days')
+	`, maxCount, maxDays)
+
+	if err != nil {
+		// Silently fail - don't disrupt logging if cleanup fails
+		// Can add logging here if needed for debugging
+		return
+	}
 }
 
 func init() {

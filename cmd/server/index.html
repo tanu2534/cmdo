@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CMDO - Command History Logger</title>
-  <meta name="description" content="Track all your terminal commands across folders with a beautiful dark-themed interface">
+  <title>CMDO - Git Bash Command History Logger</title>
+  <meta name="description" content="Track all your bash terminal commands across folders with a beautiful dark-themed interface">
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -217,25 +217,21 @@
    
  
     // Time formatting
- function formatTimestamp(date) {
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) return 'just now';
-
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-
-  const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays < 7) return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
-
-  // Use local date string for older timestamps
-  const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-  return date.toLocaleString('en-US', options);
+function formatTimestamp(date) {
+  const options = {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    day: 'numeric',
+    month: 'short',
+    year: '2-digit'
+  };
+  
+  const formatted = date.toLocaleString('en-US', options);
+  // Format: "12:50 AM, 5 Mar 26" -> "12:50 AM 5 Mar 26"
+  return formatted.replace(',', '');
 }
+
    // Toast notification
     function showToast(message, type = 'success') {
       const toastContainer = document.getElementById('toastContainer');

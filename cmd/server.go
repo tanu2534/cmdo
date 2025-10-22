@@ -27,6 +27,13 @@ type CommandJSON struct {
 	Folder    string    `json:"folder"`
 }
 
+type StatsJSON struct {
+	TotalCommands   int    `json:"totalCommands"`
+	OldestTimestamp string `json:"oldestTimestamp"`
+	NewestTimestamp string `json:"newestTimestamp"`
+	DatabaseSize    string `json:"databaseSize"`
+}
+
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the web UI server",
@@ -54,13 +61,15 @@ var serveCmd = &cobra.Command{
 		http.HandleFunc("/api/commands", apiCommandsHandler)
 		http.HandleFunc("/api/delete", apiDeleteHandler)
 		http.HandleFunc("/api/clear", apiClearHandler)
+		http.HandleFunc("/api/stats", apiStatsHandler)
 
 		// Serve HTML page
 		http.HandleFunc("/", indexHandler)
 
-		fmt.Printf("CMDO Server running at http://localhost:%s\n", port)
-		fmt.Printf("Using database: %s\n", dbPath)
-		fmt.Println("Press Ctrl+C to stop")
+		fmt.Printf("🚀 CMDO Server running at http://localhost:%s\n", port)
+		fmt.Printf("📊 Using database: %s\n", dbPath)
+		fmt.Println("💡 Auto-cleanup: Keeps last 1000 commands or 30 days (whichever is more)")
+		fmt.Println("⏸️  Press Ctrl+C to stop")
 		log.Fatal(http.ListenAndServe(":"+port, nil))
 	},
 }
@@ -167,6 +176,54 @@ func apiClearHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(200)
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+func apiStatsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	var stats StatsJSON
+
+	// Get total count
+	err := database.DB.QueryRow("SELECT COUNT(*) FROM commands").Scan(&stats.TotalCommands)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	// Get oldest and newest timestamps
+	var oldest, newest string
+	err = database.DB.QueryRow(`
+		SELECT 
+			MIN(timestamp) as oldest,
+			MAX(timestamp) as newest
+		FROM commands
+	`).Scan(&oldest, &newest)
+
+	if err != nil {
+		stats.OldestTimestamp = "N/A"
+		stats.NewestTimestamp = "N/A"
+	} else {
+		stats.OldestTimestamp = oldest
+		stats.NewestTimestamp = newest
+	}
+
+	// Get database file size
+	homeDir, _ := os.UserHomeDir()
+	dbPath := filepath.Join(homeDir, ".cmdo", "cmdo.db")
+	fileInfo, err := os.Stat(dbPath)
+	if err == nil {
+		sizeKB := float64(fileInfo.Size()) / 1024.0
+		if sizeKB < 1024 {
+			stats.DatabaseSize = fmt.Sprintf("%.2f KB", sizeKB)
+		} else {
+			stats.DatabaseSize = fmt.Sprintf("%.2f MB", sizeKB/1024.0)
+		}
+	} else {
+		stats.DatabaseSize = "Unknown"
+	}
+
+	json.NewEncoder(w).Encode(stats)
 }
 
 func init() {

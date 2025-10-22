@@ -55,23 +55,8 @@ func removeHookFromFile(filePath string) error {
 }
 
 func removeBashHook(content string) string {
-	// Pattern to match the entire bash hook:
-	// From "# CMDO Command Logger Hook" to the last "fi" that's part of the hook
-
-	// Use regex to remove the hook section
-	// This pattern matches:
-	// 1. The comment line
-	// 2. The function definition and body
-	// 3. The PROMPT_COMMAND section with its if/fi block
-	pattern := `(?s)# CMDO Command Logger Hook.*?^fi\s*$`
-
-	re := regexp.MustCompile(pattern)
-	cleaned := re.ReplaceAllString(content, "")
-
-	// If regex didn't work, try line-by-line approach
-	if strings.Contains(cleaned, "CMDO Command Logger Hook") {
-		cleaned = removeBashHookLineByLine(content)
-	}
+	// Direct line-by-line approach works best for bash
+	cleaned := removeBashHookLineByLine(content)
 
 	// Clean up excessive newlines
 	cleaned = cleanupExcessiveNewlines(cleaned)
@@ -83,50 +68,74 @@ func removeBashHookLineByLine(content string) string {
 	lines := strings.Split(content, "\n")
 	var result []string
 	inHook := false
-	fiCount := 0
+	skipNext := 0
 
-	for _, line := range lines {
-		// Start of hook
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+
+		// If we need to skip lines
+		if skipNext > 0 {
+			skipNext--
+			continue
+		}
+
+		// Start of hook - look for the marker comment
 		if strings.Contains(line, "# CMDO Command Logger Hook") {
 			inHook = true
-			fiCount = 0
-			continue
-		}
 
-		if inHook {
-			// Count 'fi' occurrences - bash hook has 2 'fi's
-			if strings.TrimSpace(line) == "fi" {
-				fiCount++
-				// After second 'fi', hook ends
-				if fiCount >= 2 {
-					inHook = false
-				}
+			// Find the end of the hook section
+			// Look for the pattern: last "fi" that closes the PROMPT_COMMAND if block
+			endIdx := findBashHookEnd(lines, i)
+			if endIdx > i {
+				// Skip all lines from current to end of hook
+				skipNext = endIdx - i
+				inHook = false
 				continue
 			}
-			// Skip all lines in hook
-			continue
 		}
 
-		result = append(result, line)
+		// Only add line if not in hook
+		if !inHook {
+			result = append(result, line)
+		}
 	}
 
 	return strings.Join(result, "\n")
 }
 
-func removePowerShellHook(content string) string {
-	// Pattern to match PowerShell hook:
-	// From "# CMDO Command Logger Hook" to the closing brace of "function Global:prompt"
+func findBashHookEnd(lines []string, startIdx int) int {
+	// Look for the pattern that ends the hook
+	// The hook ends after: "fi" that closes the PROMPT_COMMAND if statement
 
-	// Use regex to remove the hook section
-	pattern := `(?s)# CMDO Command Logger Hook.*?^function Global:prompt \{.*?^}\s*$`
+	fiCount := 0
+	foundPromptCommand := false
 
-	re := regexp.MustCompile(pattern)
-	cleaned := re.ReplaceAllString(content, "")
+	for i := startIdx; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
 
-	// If regex didn't work, try line-by-line approach
-	if strings.Contains(cleaned, "CMDO Command Logger Hook") {
-		cleaned = removePowerShellHookLineByLine(content)
+		// Track if we've seen PROMPT_COMMAND
+		if strings.Contains(line, "PROMPT_COMMAND") {
+			foundPromptCommand = true
+		}
+
+		// Count fi occurrences after we've seen the function definition
+		if line == "fi" {
+			fiCount++
+
+			// The hook has only 1 fi now (for PROMPT_COMMAND if statement)
+			// The __cmdo_log function doesn't have any if statements with fi
+			if fiCount >= 1 && foundPromptCommand {
+				return i
+			}
+		}
 	}
+
+	return startIdx
+}
+
+func removePowerShellHook(content string) string {
+	// Direct line-by-line approach works best
+	cleaned := removePowerShellHookLineByLine(content)
 
 	// Clean up excessive newlines
 	cleaned = cleanupExcessiveNewlines(cleaned)
@@ -138,47 +147,74 @@ func removePowerShellHookLineByLine(content string) string {
 	lines := strings.Split(content, "\n")
 	var result []string
 	inHook := false
-	braceDepth := 0
-	inPromptFunction := false
+	skipNext := 0
 
-	for _, line := range lines {
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+
+		// If we need to skip lines
+		if skipNext > 0 {
+			skipNext--
+			continue
+		}
+
 		// Start of hook
 		if strings.Contains(line, "# CMDO Command Logger Hook") {
 			inHook = true
-			braceDepth = 0
-			inPromptFunction = false
-			continue
+
+			// Find the end of the hook section
+			endIdx := findPowerShellHookEnd(lines, i)
+			if endIdx > i {
+				// Skip all lines from current to end of hook
+				skipNext = endIdx - i
+				inHook = false
+				continue
+			}
 		}
 
-		if inHook {
-			// Check if we're entering the Global:prompt function
-			if strings.Contains(line, "function Global:prompt") {
-				inPromptFunction = true
-				braceDepth = 0
-			}
-
-			// Track braces
-			if inPromptFunction {
-				openBraces := strings.Count(line, "{")
-				closeBraces := strings.Count(line, "}")
-				braceDepth += openBraces - closeBraces
-
-				// When we close the prompt function (braceDepth becomes 0 or negative)
-				if closeBraces > 0 && braceDepth <= 0 {
-					inHook = false
-					inPromptFunction = false
-					continue
-				}
-			}
-
-			// Skip all lines in hook
-			continue
+		// Only add line if not in hook
+		if !inHook {
+			result = append(result, line)
 		}
-
-		result = append(result, line)
 	}
 
 	return strings.Join(result, "\n")
+}
+
+func findPowerShellHookEnd(lines []string, startIdx int) int {
+	// The PowerShell hook ends after the closing brace of "function Global:prompt"
+
+	braceDepth := 0
+	inPromptFunction := false
+
+	for i := startIdx; i < len(lines); i++ {
+		line := lines[i]
+		trimmedLine := strings.TrimSpace(line)
+
+		// Check if we're entering the Global:prompt function
+		if strings.Contains(line, "function Global:prompt") {
+			inPromptFunction = true
+			braceDepth = 0
+		}
+
+		if inPromptFunction {
+			// Count opening and closing braces
+			for _, char := range trimmedLine {
+				if char == '{' {
+					braceDepth++
+				} else if char == '}' {
+					braceDepth--
+
+					// When braceDepth hits 0, we've closed the function
+					if braceDepth == 0 {
+						return i
+					}
+				}
+			}
+		}
+	}
+
+	return startIdx
 }
 
 func cleanupExcessiveNewlines(content string) string {
@@ -191,11 +227,6 @@ func cleanupExcessiveNewlines(content string) string {
 
 	return content
 }
-
-// func fileExists(path string) bool {
-// 	_, err := os.Stat(path)
-// 	return err == nil
-// }
 
 func max(a, b int) int {
 	if a > b {
