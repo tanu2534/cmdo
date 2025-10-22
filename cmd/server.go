@@ -79,7 +79,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	content, err := indexHTML.ReadFile("server/index.html")
 	if err != nil {
 		http.Error(w, "Template not found", http.StatusInternalServerError)
-		log.Println("Error reading template:", err)
+		// log.Println("Error reading template:", err)
 		return
 	}
 
@@ -87,7 +87,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.New("index").Parse(string(content))
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
-		log.Println("Error parsing template:", err)
+		// log.Println("Error parsing template:", err)
 		return
 	}
 
@@ -98,7 +98,7 @@ func apiCommandsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	log.Printf("apiCommandsHandler: Received request from %s", r.RemoteAddr)
+	// log.Printf("apiCommandsHandler: Received request from %s", r.RemoteAddr)
 
 	rows, err := database.DB.Query(`
 		SELECT id, command, exit_code, timestamp, directory 
@@ -106,7 +106,7 @@ func apiCommandsHandler(w http.ResponseWriter, r *http.Request) {
 		ORDER BY timestamp DESC
 	`)
 	if err != nil {
-		log.Printf("apiCommandsHandler: Error querying database: %s", err)
+		// log.Printf("apiCommandsHandler: Error querying database: %s", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -119,13 +119,13 @@ func apiCommandsHandler(w http.ResponseWriter, r *http.Request) {
 
 		err := rows.Scan(&cmd.ID, &cmd.Command, &cmd.ExitCode, &ts, &cmd.Folder)
 		if err != nil {
-			log.Printf("apiCommandsHandler: Error scanning row: %s", err)
+			// log.Printf("apiCommandsHandler: Error scanning row: %s", err)
 			continue
 		}
 
 		parsedTime, err := time.Parse("2006-01-02 15:04:05", ts)
 		if err != nil {
-			log.Printf("apiCommandsHandler: Error parsing time: %s", err)
+			// log.Printf("apiCommandsHandler: Error parsing time: %s", err)
 			continue
 		}
 
@@ -133,7 +133,7 @@ func apiCommandsHandler(w http.ResponseWriter, r *http.Request) {
 		commands = append(commands, cmd)
 	}
 
-	log.Printf("apiCommandsHandler: Returning %d commands", len(commands))
+	// log.Printf("apiCommandsHandler: Returning %d commands", len(commands))
 	json.NewEncoder(w).Encode(commands)
 }
 
