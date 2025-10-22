@@ -305,12 +305,12 @@ var cleanupCmd = &cobra.Command{
 			fmt.Printf("   ❌ Failed: %d\n", failed)
 		}
 
-		if removed > 0 {
-			fmt.Println("\nNext steps:")
-			fmt.Println("   1. Restart your terminal, OR")
-			fmt.Println("   2. For Bash: source ~/.bashrc")
-			fmt.Println("   3. For PowerShell: . $PROFILE")
-		}
+		// if removed > 0 {
+		// 	fmt.Println("\nNext steps:")
+		// 	fmt.Println("   1. Restart your terminal, OR")
+		// 	fmt.Println("   2. For Bash: source ~/.bashrc")
+		// 	fmt.Println("   3. For PowerShell: . $PROFILE")
+		// }
 
 		// Check for WSL
 		wslCmd := exec.Command("wsl.exe", "--list", "--quiet")

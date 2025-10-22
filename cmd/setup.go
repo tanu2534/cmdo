@@ -3,7 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
+
+	// "os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -301,16 +302,16 @@ var setupCmd = &cobra.Command{
 		currentOS := runtime.GOOS
 
 		if currentOS != "windows" {
-			fmt.Println("❌ Currently only Windows is supported")
+			fmt.Println(" Currently only Windows is supported")
 			return
 		}
 
-		fmt.Println(" Detecting installed shells...")
+		// fmt.Println(" Detecting installed shells...")
 
 		// Get proper binary path
 		cmdoBinaryPath, err := getInstalledBinaryPath()
 		if err != nil {
-			fmt.Printf("❌ Error: %v\n", err)
+			fmt.Printf(" Error: %v\n", err)
 			fmt.Println("\nInstallation steps:")
 			fmt.Println("  1. Run: go build -o cmdo.exe")
 			fmt.Printf("  2. Copy cmdo.exe to: %%USERPROFILE%%\\bin\\\n")
@@ -321,58 +322,58 @@ var setupCmd = &cobra.Command{
 
 		fmt.Printf(" Using binary: %s\n\n", cmdoBinaryPath)
 
-		userProfile := os.Getenv("USERPROFILE")
+		// userProfile := os.Getenv("USERPROFILE")
 		var foundShells []string
 
-		// Dotnet Global Tools
-		dotnetPwsh := filepath.Join(userProfile, ".dotnet", "tools", "pwsh.exe")
-		if _, err := os.Stat(dotnetPwsh); err == nil {
-			foundShells = append(foundShells, dotnetPwsh)
-			fmt.Println("✓ Found Dotnet PowerShell:", dotnetPwsh)
-		}
+		// // Dotnet Global Tools
+		// dotnetPwsh := filepath.Join(userProfile, ".dotnet", "tools", "pwsh.exe")
+		// if _, err := os.Stat(dotnetPwsh); err == nil {
+		// 	foundShells = append(foundShells, dotnetPwsh)
+		// 	fmt.Println("✓ Found Dotnet PowerShell:", dotnetPwsh)
+		// }
 
-		// Scoop
-		scoopPwsh := filepath.Join(userProfile, "scoop", "shims", "pwsh.exe")
-		if _, err := os.Stat(scoopPwsh); err == nil {
-			foundShells = append(foundShells, scoopPwsh)
-			fmt.Println("✓ Found Scoop PowerShell:", scoopPwsh)
-		}
+		// // Scoop
+		// scoopPwsh := filepath.Join(userProfile, "scoop", "shims", "pwsh.exe")
+		// if _, err := os.Stat(scoopPwsh); err == nil {
+		// 	foundShells = append(foundShells, scoopPwsh)
+		// 	fmt.Println("✓ Found Scoop PowerShell:", scoopPwsh)
+		// }
 
 		// CMD
-		cmdPath := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
-		if _, err := os.Stat(cmdPath); err == nil {
-			foundShells = append(foundShells, cmdPath)
-			fmt.Println("✓ Found CMD:", cmdPath)
-		}
+		// cmdPath := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+		// if _, err := os.Stat(cmdPath); err == nil {
+		// 	foundShells = append(foundShells, cmdPath)
+		// 	fmt.Println("✓ Found CMD:", cmdPath)
+		// }
 
 		// Use 'where' command to find PowerShell/pwsh
-		if cmdPath != "" {
-			cmd := exec.Command("where", "powershell")
-			output, err := cmd.Output()
-			if err == nil {
-				paths := strings.Split(strings.TrimSpace(string(output)), "\n")
-				for _, path := range paths {
-					path = strings.TrimSpace(path)
-					if path != "" {
-						fmt.Println("✓ Found PowerShell via 'where':", path)
-						foundShells = append(foundShells, path)
-					}
-				}
-			}
+		// if cmdPath != "" {
+		// 	cmd := exec.Command("where", "powershell")
+		// 	output, err := cmd.Output()
+		// 	if err == nil {
+		// 		paths := strings.Split(strings.TrimSpace(string(output)), "\n")
+		// 		for _, path := range paths {
+		// 			path = strings.TrimSpace(path)
+		// 			if path != "" {
+		// 				fmt.Println("✓ Found PowerShell via 'where':", path)
+		// 				foundShells = append(foundShells, path)
+		// 			}
+		// 		}
+		// 	}
 
-			cmd = exec.Command("where", "pwsh")
-			output, err = cmd.Output()
-			if err == nil {
-				paths := strings.Split(strings.TrimSpace(string(output)), "\n")
-				for _, path := range paths {
-					path = strings.TrimSpace(path)
-					if path != "" {
-						fmt.Println("✓ Found pwsh via 'where':", path)
-						foundShells = append(foundShells, path)
-					}
-				}
-			}
-		}
+		// 	cmd = exec.Command("where", "pwsh")
+		// 	output, err = cmd.Output()
+		// 	if err == nil {
+		// 		paths := strings.Split(strings.TrimSpace(string(output)), "\n")
+		// 		for _, path := range paths {
+		// 			path = strings.TrimSpace(path)
+		// 			if path != "" {
+		// 				fmt.Println("✓ Found pwsh via 'where':", path)
+		// 				foundShells = append(foundShells, path)
+		// 			}
+		// 		}
+		// 	}
+		// }
 
 		// Git Bash
 		gitBashPath := "C:\\Program Files\\Git\\bin\\bash.exe"
@@ -382,30 +383,30 @@ var setupCmd = &cobra.Command{
 		}
 
 		// WSL check
-		wslCmd := exec.Command("wsl.exe", "--list", "--quiet")
-		output, err := wslCmd.Output()
-		if err == nil {
-			distros := strings.Split(string(output), "\n")
-			hasWSL := false
-			for _, distro := range distros {
-				distro = strings.TrimSpace(distro)
-				if distro != "" {
-					if !hasWSL {
-						fmt.Println("\n WSL distros found:")
-						hasWSL = true
-					}
-					fmt.Println("   -", distro)
-				}
-			}
-			if hasWSL {
-				fmt.Println("   WSL requires manual setup inside each distro")
-			}
-		}
+		// wslCmd := exec.Command("wsl.exe", "--list", "--quiet")
+		// output, err := wslCmd.Output()
+		// if err == nil {
+		// 	distros := strings.Split(string(output), "\n")
+		// 	hasWSL := false
+		// 	for _, distro := range distros {
+		// 		distro = strings.TrimSpace(distro)
+		// 		if distro != "" {
+		// 			if !hasWSL {
+		// 				fmt.Println("\n WSL distros found:")
+		// 				hasWSL = true
+		// 			}
+		// 			fmt.Println("   -", distro)
+		// 		}
+		// 	}
+		// 	if hasWSL {
+		// 		fmt.Println("   WSL requires manual setup inside each distro")
+		// 	}
+		// }
 
 		fmt.Printf("\n Total shells found: %d\n", len(foundShells))
 
 		if len(foundShells) == 0 {
-			fmt.Println("❌ No shells found to configure")
+			fmt.Println(" No shells found to configure")
 			return
 		}
 
@@ -423,18 +424,18 @@ var setupCmd = &cobra.Command{
 
 			err := addHookToConfigFile(shellInfo, cmdoBinaryPath)
 			if err != nil {
-				fmt.Printf("   ❌ Error: %v\n\n", err)
+				fmt.Printf("    Error: %v\n\n", err)
 			} else {
 				successCount++
 			}
 		}
 
 		fmt.Printf("\n Setup complete! (%d/%d shells configured)\n", successCount, len(foundShells))
-		fmt.Println("\nNext steps:")
-		fmt.Println("  1. Restart your terminal, OR")
-		fmt.Println("  2. For Bash: source ~/.bashrc")
-		fmt.Println("  3. For PowerShell: . $PROFILE")
-		fmt.Println("\n Test it: Run any command and check 'cmdo list'")
+		// fmt.Println("\nNext steps:")
+		// fmt.Println("  1. Restart your terminal, OR")
+		// fmt.Println("  2. For Bash: source ~/.bashrc")
+		// fmt.Println("  3. For PowerShell: . $PROFILE")
+		// fmt.Println("\n Test it: Run any command and check 'cmdo list'")
 	},
 }
 

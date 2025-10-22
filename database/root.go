@@ -119,7 +119,7 @@ func InitDB(path string) {
 		log.Fatalf("Error creating table: %q: %s\n", err, sqlStmt)
 	}
 
-	fmt.Println("DB Initialized")
+	// fmt.Println("DB Initialized")
 }
 
 func InsertCmd(cmd string, code string, dir string) {
