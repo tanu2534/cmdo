@@ -88,7 +88,7 @@ func GetCommandsGrouped() (map[string][]Command, error) {
 func InitDB(path string) {
 	dbPath = path
 
-	// ✅ Create directory if it doesn't exist
+	//  Create directory if it doesn't exist
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		log.Fatalf("Error creating database directory: %v", err)

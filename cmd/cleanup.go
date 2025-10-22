@@ -248,7 +248,7 @@ var cleanupCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("🧹 Cleaning up CMDO hooks...")
+		fmt.Println(" Cleaning up CMDO hooks...")
 
 		userProfile := os.Getenv("USERPROFILE")
 		configFiles := make(map[string]string)
@@ -281,32 +281,32 @@ var cleanupCmd = &cobra.Command{
 		failed := 0
 
 		for shellName, configPath := range configFiles {
-			fmt.Printf("🔍 Checking %s (%s)...\n", shellName, configPath)
+			fmt.Printf(" Checking %s (%s)...\n", shellName, configPath)
 
 			err := removeHookFromFile(configPath)
 			if err != nil {
 				if strings.Contains(err.Error(), "no CMDO hook found") {
-					fmt.Printf("   ℹ️  No hook found\n")
+					fmt.Printf("  No hook found\n")
 					notFound++
 				} else {
 					fmt.Printf("   ❌ Error: %v\n", err)
 					failed++
 				}
 			} else {
-				fmt.Printf("   ✅ Hook removed successfully\n")
+				fmt.Printf("    Hook removed successfully\n")
 				removed++
 			}
 		}
 
-		fmt.Printf("\n📊 Summary:\n")
-		fmt.Printf("   ✅ Removed: %d\n", removed)
-		fmt.Printf("   ℹ️  Not found: %d\n", notFound)
+		fmt.Printf("\n Summary:\n")
+		fmt.Printf("    Removed: %d\n", removed)
+		fmt.Printf("  Not found: %d\n", notFound)
 		if failed > 0 {
 			fmt.Printf("   ❌ Failed: %d\n", failed)
 		}
 
 		if removed > 0 {
-			fmt.Println("\n📝 Next steps:")
+			fmt.Println("\nNext steps:")
 			fmt.Println("   1. Restart your terminal, OR")
 			fmt.Println("   2. For Bash: source ~/.bashrc")
 			fmt.Println("   3. For PowerShell: . $PROFILE")
@@ -326,11 +326,11 @@ var cleanupCmd = &cobra.Command{
 				}
 			}
 			if hasWSL {
-				fmt.Println("\n⚠️  WSL detected: Please manually remove hooks from WSL .bashrc if needed")
+				fmt.Println("\nWSL detected: Please manually remove hooks from WSL .bashrc if needed")
 			}
 		}
 
-		fmt.Println("\n✨ Cleanup complete!")
+		fmt.Println("\n Cleanup complete!")
 	},
 }
 

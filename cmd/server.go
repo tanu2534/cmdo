@@ -66,10 +66,10 @@ var serveCmd = &cobra.Command{
 		// Serve HTML page
 		http.HandleFunc("/", indexHandler)
 
-		fmt.Printf("🚀 CMDO Server running at http://localhost:%s\n", port)
-		fmt.Printf("📊 Using database: %s\n", dbPath)
-		fmt.Println("💡 Auto-cleanup: Keeps last 1000 commands or 30 days (whichever is more)")
-		fmt.Println("⏸️  Press Ctrl+C to stop")
+		fmt.Printf("CMDO Server running at http://localhost:%s\n", port)
+		fmt.Printf(" Using database: %s\n", dbPath)
+		fmt.Println(" Auto-cleanup: Keeps last 1000 commands or 30 days (whichever is more)")
+		fmt.Println("Press Ctrl+C to stop")
 		log.Fatal(http.ListenAndServe(":"+port, nil))
 	},
 }

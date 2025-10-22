@@ -194,7 +194,7 @@ func addHookToConfigFile(shellInfo shellInfo, cmdoBinaryPath string) error {
 		}
 
 		if strings.Contains(string(content), "CMDO Command Logger Hook") {
-			fmt.Printf("   ℹ️  Hook already exists in %s\n", shellInfo.ConfigPath)
+			fmt.Printf("  Hook already exists in %s\n", shellInfo.ConfigPath)
 			return nil
 		}
 	} else {
@@ -215,7 +215,7 @@ func addHookToConfigFile(shellInfo shellInfo, cmdoBinaryPath string) error {
 		return err
 	}
 
-	fmt.Printf("   ✅ Hook added to %s\n", shellInfo.ConfigPath)
+	fmt.Printf("    Hook added to %s\n", shellInfo.ConfigPath)
 	return nil
 }
 
@@ -226,7 +226,7 @@ func fileExists(path string) bool {
 
 func setupCMDHook(cmdoBinaryPath string) error {
 	// FIXED: Actually setup CMD hook automatically
-	fmt.Println("   🔧 Setting up CMD hook...")
+	fmt.Println("    Setting up CMD hook...")
 
 	// Create a batch file that wraps commands
 	batchContent := fmt.Sprintf(`@echo off
@@ -253,12 +253,12 @@ exit /b !exitcode!
 		return fmt.Errorf("failed to create wrapper: %v", err)
 	}
 
-	fmt.Println("\n   ⚠️  CMD requires manual registry modification:")
+	fmt.Println("\n   CMD requires manual registry modification:")
 	fmt.Println("   Run this command as Administrator in CMD:")
 	fmt.Printf(`   reg add "HKCU\Software\Microsoft\Command Processor" /v AutoRun /t REG_SZ /d "@echo off" /f`)
 	fmt.Println("\n\n   Or use DOSKEY (per-session):")
 	fmt.Printf("   doskey cmdo=%s $*\n", cmdoBinaryPath)
-	fmt.Println("\n   ℹ️  Note: CMD logging is limited. Consider using PowerShell or Git Bash for better experience.")
+	fmt.Println("\n  Note: CMD logging is limited. Consider using PowerShell or Git Bash for better experience.")
 
 	return nil
 }
@@ -305,13 +305,13 @@ var setupCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("🔍 Detecting installed shells...")
+		fmt.Println(" Detecting installed shells...")
 
 		// Get proper binary path
 		cmdoBinaryPath, err := getInstalledBinaryPath()
 		if err != nil {
 			fmt.Printf("❌ Error: %v\n", err)
-			fmt.Println("\n📝 Installation steps:")
+			fmt.Println("\nInstallation steps:")
 			fmt.Println("  1. Run: go build -o cmdo.exe")
 			fmt.Printf("  2. Copy cmdo.exe to: %%USERPROFILE%%\\bin\\\n")
 			fmt.Println("  3. Or run: go install")
@@ -319,7 +319,7 @@ var setupCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("✅ Using binary: %s\n\n", cmdoBinaryPath)
+		fmt.Printf(" Using binary: %s\n\n", cmdoBinaryPath)
 
 		userProfile := os.Getenv("USERPROFILE")
 		var foundShells []string
@@ -391,25 +391,25 @@ var setupCmd = &cobra.Command{
 				distro = strings.TrimSpace(distro)
 				if distro != "" {
 					if !hasWSL {
-						fmt.Println("\n💡 WSL distros found:")
+						fmt.Println("\n WSL distros found:")
 						hasWSL = true
 					}
 					fmt.Println("   -", distro)
 				}
 			}
 			if hasWSL {
-				fmt.Println("   ⚠️  WSL requires manual setup inside each distro")
+				fmt.Println("   WSL requires manual setup inside each distro")
 			}
 		}
 
-		fmt.Printf("\n✅ Total shells found: %d\n", len(foundShells))
+		fmt.Printf("\n Total shells found: %d\n", len(foundShells))
 
 		if len(foundShells) == 0 {
 			fmt.Println("❌ No shells found to configure")
 			return
 		}
 
-		fmt.Println("\n🔧 Installing hooks...")
+		fmt.Println("\n Installing hooks...")
 
 		successCount := 0
 		for _, shellPath := range foundShells {
@@ -419,7 +419,7 @@ var setupCmd = &cobra.Command{
 				continue
 			}
 
-			fmt.Printf("⚙️  Setting up %s...\n", shellInfo.Name)
+			fmt.Printf("Setting up %s...\n", shellInfo.Name)
 
 			err := addHookToConfigFile(shellInfo, cmdoBinaryPath)
 			if err != nil {
@@ -429,12 +429,12 @@ var setupCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Printf("\n✨ Setup complete! (%d/%d shells configured)\n", successCount, len(foundShells))
-		fmt.Println("\n📝 Next steps:")
+		fmt.Printf("\n Setup complete! (%d/%d shells configured)\n", successCount, len(foundShells))
+		fmt.Println("\nNext steps:")
 		fmt.Println("  1. Restart your terminal, OR")
 		fmt.Println("  2. For Bash: source ~/.bashrc")
 		fmt.Println("  3. For PowerShell: . $PROFILE")
-		fmt.Println("\n💡 Test it: Run any command and check 'cmdo list'")
+		fmt.Println("\n Test it: Run any command and check 'cmdo list'")
 	},
 }
 
