@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/tanu2534/cmdo/database"
@@ -19,12 +18,13 @@ import (
 var indexHTML embed.FS
 
 // Command struct for JSON response
+// Command struct for JSON response - YE CHANGE KARO
 type CommandJSON struct {
-	ID        string    `json:"id"`
-	Command   string    `json:"command"`
-	ExitCode  int       `json:"exitCode"`
-	Timestamp time.Time `json:"timestamp"`
-	Folder    string    `json:"folder"`
+	ID        string `json:"id"`
+	Command   string `json:"command"`
+	ExitCode  int    `json:"exitCode"`
+	Timestamp string `json:"timestamp"` // TIME.TIME KI JAGAH STRING
+	Folder    string `json:"folder"`
 }
 
 type StatsJSON struct {
@@ -98,15 +98,12 @@ func apiCommandsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// log.Printf("apiCommandsHandler: Received request from %s", r.RemoteAddr)
-
 	rows, err := database.DB.Query(`
 		SELECT id, command, exit_code, timestamp, directory 
 		FROM commands 
 		ORDER BY timestamp DESC
 	`)
 	if err != nil {
-		// log.Printf("apiCommandsHandler: Error querying database: %s", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -115,28 +112,18 @@ func apiCommandsHandler(w http.ResponseWriter, r *http.Request) {
 	var commands []CommandJSON
 	for rows.Next() {
 		var cmd CommandJSON
-		var ts string
 
-		err := rows.Scan(&cmd.ID, &cmd.Command, &cmd.ExitCode, &ts, &cmd.Folder)
+		// DIRECTLY STRING ME SCAN KARO
+		err := rows.Scan(&cmd.ID, &cmd.Command, &cmd.ExitCode, &cmd.Timestamp, &cmd.Folder)
 		if err != nil {
-			// log.Printf("apiCommandsHandler: Error scanning row: %s", err)
 			continue
 		}
 
-		parsedTime, err := time.Parse("2006-01-02 15:04:05", ts)
-		if err != nil {
-			// log.Printf("apiCommandsHandler: Error parsing time: %s", err)
-			continue
-		}
-
-		cmd.Timestamp = parsedTime
 		commands = append(commands, cmd)
 	}
 
-	// log.Printf("apiCommandsHandler: Returning %d commands", len(commands))
 	json.NewEncoder(w).Encode(commands)
 }
-
 func apiDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", 405)
