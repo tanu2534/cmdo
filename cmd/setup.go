@@ -3,8 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
-
-	// "os/exec"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,26 +21,53 @@ type shellInfo struct {
 func identifyShell(shell string) shellInfo {
 	exepath := strings.ToLower(shell)
 
-	if strings.Contains(exepath, "cmd.exe") {
-		return shellInfo{
-			Name:       "CMD",
-			ExePath:    exepath,
-			ConfigPath: "",
-			Type:       "cmd",
+	switch runtime.GOOS {
+	case "windows":
+		if strings.Contains(exepath, "cmd.exe") {
+			return shellInfo{
+				Name:       "CMD",
+				ExePath:    exepath,
+				ConfigPath: "",
+				Type:       "cmd",
+			}
+		} else if strings.Contains(exepath, "powershell.exe") || strings.Contains(exepath, "pwsh.exe") {
+			return shellInfo{
+				Name:       "PowerShell",
+				ExePath:    exepath,
+				ConfigPath: getPowerShellProfile(),
+				Type:       "powershell",
+			}
+		} else if strings.Contains(exepath, "bash.exe") {
+			return shellInfo{
+				Name:       "Git Bash",
+				ExePath:    exepath,
+				ConfigPath: filepath.Join(os.Getenv("USERPROFILE"), ".bashrc"),
+				Type:       "bash",
+			}
 		}
-	} else if strings.Contains(exepath, "powershell.exe") || strings.Contains(exepath, "pwsh.exe") {
-		return shellInfo{
-			Name:       "PowerShell",
-			ExePath:    exepath,
-			ConfigPath: getPowerShellProfile(),
-			Type:       "powershell",
-		}
-	} else if strings.Contains(exepath, "bash.exe") {
-		return shellInfo{
-			Name:       "Git Bash",
-			ExePath:    exepath,
-			ConfigPath: filepath.Join(os.Getenv("USERPROFILE"), ".bashrc"),
-			Type:       "bash",
+	case "darwin":
+		// macOS shells
+		if strings.Contains(exepath, "zsh") {
+			return shellInfo{
+				Name:       "Zsh",
+				ExePath:    exepath,
+				ConfigPath: filepath.Join(os.Getenv("HOME"), ".zshrc"),
+				Type:       "zsh",
+			}
+		} else if strings.Contains(exepath, "bash") {
+			return shellInfo{
+				Name:       "Bash",
+				ExePath:    exepath,
+				ConfigPath: filepath.Join(os.Getenv("HOME"), ".bashrc"),
+				Type:       "bash",
+			}
+		} else if strings.Contains(exepath, "fish") {
+			return shellInfo{
+				Name:       "Fish",
+				ExePath:    exepath,
+				ConfigPath: filepath.Join(os.Getenv("HOME"), ".config", "fish", "config.fish"),
+				Type:       "fish",
+			}
 		}
 	}
 
@@ -50,89 +76,65 @@ func identifyShell(shell string) shellInfo {
 
 func getPowerShellProfile() string {
 	userProfile := os.Getenv("USERPROFILE")
-
-	// PowerShell Core (pwsh)
 	psCorePath := filepath.Join(userProfile, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
-
-	// Windows PowerShell (powershell)
 	winPSPath := filepath.Join(userProfile, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
 
-	// Check which one exists, prefer Core
 	if _, err := os.Stat(psCorePath); err == nil {
 		return psCorePath
 	}
-
 	if _, err := os.Stat(winPSPath); err == nil {
 		return winPSPath
 	}
-
-	// Return Core path (will be created if needed)
 	return psCorePath
 }
 
 func getPowerShellHook(cmdoBinaryPath string) string {
-	// FIXED: Exit code ko history se nikalna padega, $LASTEXITCODE unreliable hai prompt mein
 	return fmt.Sprintf(`
 # CMDO Command Logger Hook
 $Global:__CmdoLastHistoryId = -1
 
 function Invoke-CmdoLog {
-    $history = Get-History -Count 1 -ErrorAction SilentlyContinue
-    
-    if ($history -and $history.Id -ne $Global:__CmdoLastHistoryId) {
-        $Global:__CmdoLastHistoryId = $history.Id
-        $lastCommand = $history.CommandLine
-        
-        # Get exit code from execution info (more reliable than $LASTEXITCODE in prompt)
-        $exitCode = 0
-        if ($history.ExecutionStatus -eq 'Failed') {
-            $exitCode = 1
-        }
-        
-        $currentDir = $PWD.Path
-        
-        if ($lastCommand) {
-            try {
-                & '%s' log --command "$lastCommand" --exit-code $exitCode --pwd "$currentDir" 2>$null
-            } catch {
-                # Silently ignore logging errors
-            }
-        }
-    }
+	$history = Get-History -Count 1 -ErrorAction SilentlyContinue
+	if ($history -and $history.Id -ne $Global:__CmdoLastHistoryId) {
+		$Global:__CmdoLastHistoryId = $history.Id
+		$lastCommand = $history.CommandLine
+		$exitCode = 0
+		if ($history.ExecutionStatus -eq 'Failed') {
+			$exitCode = 1
+		}
+		$currentDir = $PWD.Path
+		if ($lastCommand) {
+			try {
+				& '%s' log --command "$lastCommand" --exit-code $exitCode --pwd "$currentDir" 2>$null
+			} catch {
+				# Silently ignore logging errors
+			}
+		}
+	}
 }
 
-# Save original prompt if exists
 if (Test-Path Function:\prompt) {
-    $Global:__CmdoOriginalPromptDef = ${function:prompt}.ToString()
+	$Global:__CmdoOriginalPromptDef = ${function:prompt}.ToString()
 }
 
 function Global:prompt {
-    # CRITICAL: Capture exit code IMMEDIATELY before anything else
-    $Global:__CmdoLastExitCode = $LASTEXITCODE
-    $Global:__CmdoLastSuccess = $?
-    
-    Invoke-CmdoLog
-    
-    # Restore exit code for user's prompt
-    $global:LASTEXITCODE = $Global:__CmdoLastExitCode
-    
-    # Restore and execute original prompt
-    if ($Global:__CmdoOriginalPromptDef) {
-        $result = Invoke-Expression $Global:__CmdoOriginalPromptDef
-        if ($result) { return $result }
-    }
-    
-    # Default prompt if no original exists
-    "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) "
+	$Global:__CmdoLastExitCode = $LASTEXITCODE
+	$Global:__CmdoLastSuccess = $?
+	Invoke-CmdoLog
+	$global:LASTEXITCODE = $Global:__CmdoLastExitCode
+	
+	if ($Global:__CmdoOriginalPromptDef) {
+		$result = Invoke-Expression $Global:__CmdoOriginalPromptDef
+		if ($result) {
+			return $result
+		}
+	}
+	"PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) "
 }
 `, cmdoBinaryPath)
 }
 
 func getBashHook(cmdoBinaryPath string) string {
-	// Windows paths ko Git Bash compatible format me convert karo
-	bashCompatiblePath := strings.ReplaceAll(cmdoBinaryPath, "\\", "/")
-
-	// FIXED: Track history ID AND shell initialization to prevent startup logging
 	return fmt.Sprintf(`
 # CMDO Command Logger Hook
 __cmdo_last_exit_code=0
@@ -140,37 +142,74 @@ __cmdo_last_history_id=""
 __cmdo_initialized=0
 
 function __cmdo_capture_exit() {
-    __cmdo_last_exit_code=$?
+	__cmdo_last_exit_code=$?
 }
 
 function __cmdo_log() {
-    # Get history with ID
-    local history_line=$(history 1)
-    local history_id=$(echo "$history_line" | awk '{print $1}')
-    local last_command=$(echo "$history_line" | sed 's/^[ ]*[0-9]*[ ]*//')
-    local exit_code=$__cmdo_last_exit_code
-    local current_dir=$(pwd)
-    
-    # Skip logging on shell initialization (first prompt)
-    if [ "$__cmdo_initialized" -eq 0 ]; then
-        __cmdo_initialized=1
-        __cmdo_last_history_id="$history_id"
-        return
-    fi
-    
-    # Only log if this is a new command (different history ID)
-    if [ -n "$last_command" ] && [ "$history_id" != "$__cmdo_last_history_id" ]; then
-        __cmdo_last_history_id="$history_id"
-        "%s" log --command "$last_command" --exit-code $exit_code --pwd "$current_dir" 2>/dev/null
-    fi
+	local history_line=$(history 1)
+	local history_id=$(echo "$history_line" | awk '{print $1}')
+	local last_command=$(echo "$history_line" | sed 's/^[ ]*[0-9]*[ ]*//')
+	local exit_code=$__cmdo_last_exit_code
+	local current_dir=$(pwd)
+
+	if [ "$__cmdo_initialized" -eq 0 ]; then
+		__cmdo_initialized=1
+		__cmdo_last_history_id="$history_id"
+		return
+	fi
+
+	if [ -n "$last_command" ] && [ "$history_id" != "$__cmdo_last_history_id" ]; then
+		__cmdo_last_history_id="$history_id"
+		"%s" log --command "$last_command" --exit-code $exit_code --pwd "$current_dir" 2>/dev/null
+	fi
 }
 
-# CRITICAL: First capture exit code, then log
-# This ensures we get the actual command exit code, not the exit code of history/other commands
 if [[ ! "$PROMPT_COMMAND" =~ "__cmdo_capture_exit" ]]; then
-    PROMPT_COMMAND="__cmdo_capture_exit; __cmdo_log${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+	PROMPT_COMMAND="__cmdo_capture_exit; __cmdo_log${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 fi
-`, bashCompatiblePath)
+`, cmdoBinaryPath)
+}
+
+func getZshHook(cmdoBinaryPath string) string {
+	return fmt.Sprintf(`
+# CMDO Command Logger Hook
+__cmdo_last_exit_code=0
+__cmdo_initialized=0
+
+function __cmdo_preexec() {
+	__cmdo_last_command="$1"
+}
+
+function __cmdo_precmd() {
+	__cmdo_last_exit_code=$?
+	local current_dir=$(pwd)
+	
+	if [ "$__cmdo_initialized" -eq 0 ]; then
+		__cmdo_initialized=1
+		return
+	fi
+
+	if [ -n "$__cmdo_last_command" ]; then
+		"%s" log --command "$__cmdo_last_command" --exit-code $__cmdo_last_exit_code --pwd "$current_dir" 2>/dev/null
+		__cmdo_last_command=""
+	fi
+}
+
+autoload -Uz add-zsh-hook
+add-zsh-hook preexec __cmdo_preexec
+add-zsh-hook precmd __cmdo_precmd
+`, cmdoBinaryPath)
+}
+
+func getFishHook(cmdoBinaryPath string) string {
+	return fmt.Sprintf(`
+# CMDO Command Logger Hook
+function __cmdo_log --on-event fish_postexec
+	set -l exit_code $status
+	set -l current_dir (pwd)
+	"%s" log --command "$argv[1]" --exit-code $exit_code --pwd "$current_dir" 2>/dev/null
+end
+`, cmdoBinaryPath)
 }
 
 func addHookToConfigFile(shellInfo shellInfo, cmdoBinaryPath string) error {
@@ -181,30 +220,30 @@ func addHookToConfigFile(shellInfo shellInfo, cmdoBinaryPath string) error {
 		hookScript = getPowerShellHook(cmdoBinaryPath)
 	case "bash":
 		hookScript = getBashHook(cmdoBinaryPath)
+	case "zsh":
+		hookScript = getZshHook(cmdoBinaryPath)
+	case "fish":
+		hookScript = getFishHook(cmdoBinaryPath)
 	case "cmd":
 		return setupCMDHook(cmdoBinaryPath)
 	default:
 		return fmt.Errorf("unsupported shell type")
 	}
 
-	// Check if hook already exists
 	if fileExists(shellInfo.ConfigPath) {
 		content, err := os.ReadFile(shellInfo.ConfigPath)
 		if err != nil {
 			return err
 		}
-
 		if strings.Contains(string(content), "CMDO Command Logger Hook") {
-			fmt.Printf("  Hook already exists in %s\n", shellInfo.ConfigPath)
+			fmt.Printf("✓ Hook already exists in %s\n", shellInfo.ConfigPath)
 			return nil
 		}
 	} else {
-		// Create config file directory if needed
 		configDir := filepath.Dir(shellInfo.ConfigPath)
 		os.MkdirAll(configDir, 0755)
 	}
 
-	// Append hook to config file
 	f, err := os.OpenFile(shellInfo.ConfigPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
@@ -216,7 +255,7 @@ func addHookToConfigFile(shellInfo shellInfo, cmdoBinaryPath string) error {
 		return err
 	}
 
-	fmt.Printf("    Hook added to %s\n", shellInfo.ConfigPath)
+	fmt.Printf("✓ Hook added to %s\n", shellInfo.ConfigPath)
 	return nil
 }
 
@@ -226,58 +265,60 @@ func fileExists(path string) bool {
 }
 
 func setupCMDHook(cmdoBinaryPath string) error {
-	// FIXED: Actually setup CMD hook automatically
-	fmt.Println("    Setting up CMD hook...")
+	fmt.Println("⚠ Setting up CMD hook...")
 
-	// Create a batch file that wraps commands
 	batchContent := fmt.Sprintf(`@echo off
 setlocal enabledelayedexpansion
-
 REM Capture the command
 set "cmd=%%*"
-
 REM Execute the command and capture exit code
 %%*
 set "exitcode=!errorlevel!"
-
 REM Log to cmdo
 "%s" log --command "!cmd!" --exit-code !exitcode! --pwd "%%CD%%" 2>nul
-
 REM Return original exit code
 exit /b !exitcode!
 `, cmdoBinaryPath)
 
-	// Save batch file
 	cmdoWrapperPath := filepath.Join(filepath.Dir(cmdoBinaryPath), "cmdo-cmd-wrapper.bat")
 	err := os.WriteFile(cmdoWrapperPath, []byte(batchContent), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to create wrapper: %v", err)
 	}
 
-	fmt.Println("\n   CMD requires manual registry modification:")
-	fmt.Println("   Run this command as Administrator in CMD:")
-	fmt.Printf(`   reg add "HKCU\Software\Microsoft\Command Processor" /v AutoRun /t REG_SZ /d "@echo off" /f`)
-	fmt.Println("\n\n   Or use DOSKEY (per-session):")
-	fmt.Printf("   doskey cmdo=%s $*\n", cmdoBinaryPath)
+	fmt.Println("\n⚠ CMD requires manual registry modification:")
+	fmt.Println("  Run this command as Administrator in CMD:")
+	fmt.Printf(`  reg add "HKCU\Software\Microsoft\Command Processor" /v AutoRun /t REG_SZ /d "@echo off" /f`)
+	fmt.Println("\n\n  Or use DOSKEY (per-session):")
+	fmt.Printf("  doskey cmdo=%s $*\n", cmdoBinaryPath)
 	fmt.Println("\n  Note: CMD logging is limited. Consider using PowerShell or Git Bash for better experience.")
 
 	return nil
 }
 
 func getInstalledBinaryPath() (string, error) {
-	// First try to get the current executable path
 	exePath, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
 
-	// Check if it's a temporary Go build path
 	if strings.Contains(exePath, "go-build") {
-		// Try to find installed binary in common locations
-		possiblePaths := []string{
-			filepath.Join(os.Getenv("GOPATH"), "bin", "cmdo.exe"),
-			filepath.Join(os.Getenv("USERPROFILE"), "go", "bin", "cmdo.exe"),
-			filepath.Join(os.Getenv("USERPROFILE"), "bin", "cmdo.exe"),
+		var possiblePaths []string
+
+		switch runtime.GOOS {
+		case "windows":
+			possiblePaths = []string{
+				filepath.Join(os.Getenv("GOPATH"), "bin", "cmdo.exe"),
+				filepath.Join(os.Getenv("USERPROFILE"), "go", "bin", "cmdo.exe"),
+				filepath.Join(os.Getenv("USERPROFILE"), "bin", "cmdo.exe"),
+			}
+		default:
+			possiblePaths = []string{
+				filepath.Join(os.Getenv("GOPATH"), "bin", "cmdo"),
+				filepath.Join(os.Getenv("HOME"), "go", "bin", "cmdo"),
+				filepath.Join(os.Getenv("HOME"), "bin", "cmdo"),
+				"/usr/local/bin/cmdo",
+			}
 		}
 
 		for _, path := range possiblePaths {
@@ -286,11 +327,52 @@ func getInstalledBinaryPath() (string, error) {
 			}
 		}
 
-		// If not found, suggest installation
 		return "", fmt.Errorf("cmdo is not installed. Please run: go install")
 	}
 
 	return exePath, nil
+}
+
+func findMacOSShells() []string {
+	var foundShells []string
+
+	// Current user shell
+	userShell := os.Getenv("SHELL")
+	if userShell != "" {
+		foundShells = append(foundShells, userShell)
+		fmt.Printf("✓ Found current shell: %s\n", userShell)
+	}
+
+	// Common shell locations
+	commonShells := []string{
+		"/bin/zsh",
+		"/bin/bash",
+		"/usr/local/bin/zsh",
+		"/usr/local/bin/bash",
+		"/opt/homebrew/bin/zsh",
+		"/opt/homebrew/bin/bash",
+		"/usr/local/bin/fish",
+		"/opt/homebrew/bin/fish",
+	}
+
+	for _, shell := range commonShells {
+		if fileExists(shell) {
+			// Avoid duplicates
+			isDuplicate := false
+			for _, existing := range foundShells {
+				if existing == shell {
+					isDuplicate = true
+					break
+				}
+			}
+			if !isDuplicate {
+				foundShells = append(foundShells, shell)
+				fmt.Printf("✓ Found shell: %s\n", shell)
+			}
+		}
+	}
+
+	return foundShells
 }
 
 var setupCmd = &cobra.Command{
@@ -301,20 +383,18 @@ var setupCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		currentOS := runtime.GOOS
 
-		if currentOS != "windows" {
-			fmt.Println(" Currently only Windows is supported")
-			return
-		}
-
-		// fmt.Println(" Detecting installed shells...")
-
-		// Get proper binary path
 		cmdoBinaryPath, err := getInstalledBinaryPath()
 		if err != nil {
 			fmt.Printf(" Error: %v\n", err)
-			fmt.Println("\nInstallation steps:")
-			fmt.Println("  1. Run: go build -o cmdo.exe")
-			fmt.Printf("  2. Copy cmdo.exe to: %%USERPROFILE%%\\bin\\\n")
+			fmt.Println("\n Installation steps:")
+			switch currentOS {
+			case "windows":
+				fmt.Println("  1. Run: go build -o cmdo.exe")
+				fmt.Printf("  2. Copy cmdo.exe to: %%USERPROFILE%%\\bin\\\n")
+			default:
+				fmt.Println("  1. Run: go build -o cmdo")
+				fmt.Println("  2. Copy cmdo to: ~/bin/ or /usr/local/bin/")
+			}
 			fmt.Println("  3. Or run: go install")
 			fmt.Println("  4. Then run: cmdo setup")
 			return
@@ -322,86 +402,33 @@ var setupCmd = &cobra.Command{
 
 		fmt.Printf(" Using binary: %s\n\n", cmdoBinaryPath)
 
-		// userProfile := os.Getenv("USERPROFILE")
 		var foundShells []string
 
-		// // Dotnet Global Tools
-		// dotnetPwsh := filepath.Join(userProfile, ".dotnet", "tools", "pwsh.exe")
-		// if _, err := os.Stat(dotnetPwsh); err == nil {
-		// 	foundShells = append(foundShells, dotnetPwsh)
-		// 	fmt.Println("✓ Found Dotnet PowerShell:", dotnetPwsh)
-		// }
+		switch currentOS {
+		case "windows":
+			// Windows shell detection (existing code)
+			gitBashPath := "C:\\Program Files\\Git\\bin\\bash.exe"
+			if _, err := os.Stat(gitBashPath); err == nil {
+				foundShells = append(foundShells, gitBashPath)
+				fmt.Println("✓ Found Git Bash:", gitBashPath)
+			}
 
-		// // Scoop
-		// scoopPwsh := filepath.Join(userProfile, "scoop", "shims", "pwsh.exe")
-		// if _, err := os.Stat(scoopPwsh); err == nil {
-		// 	foundShells = append(foundShells, scoopPwsh)
-		// 	fmt.Println("✓ Found Scoop PowerShell:", scoopPwsh)
-		// }
-
-		// CMD
-		// cmdPath := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
-		// if _, err := os.Stat(cmdPath); err == nil {
-		// 	foundShells = append(foundShells, cmdPath)
-		// 	fmt.Println("✓ Found CMD:", cmdPath)
-		// }
-
-		// Use 'where' command to find PowerShell/pwsh
-		// if cmdPath != "" {
-		// 	cmd := exec.Command("where", "powershell")
-		// 	output, err := cmd.Output()
-		// 	if err == nil {
-		// 		paths := strings.Split(strings.TrimSpace(string(output)), "\n")
-		// 		for _, path := range paths {
-		// 			path = strings.TrimSpace(path)
-		// 			if path != "" {
-		// 				fmt.Println("✓ Found PowerShell via 'where':", path)
-		// 				foundShells = append(foundShells, path)
-		// 			}
-		// 		}
-		// 	}
-
-		// 	cmd = exec.Command("where", "pwsh")
-		// 	output, err = cmd.Output()
-		// 	if err == nil {
-		// 		paths := strings.Split(strings.TrimSpace(string(output)), "\n")
-		// 		for _, path := range paths {
-		// 			path = strings.TrimSpace(path)
-		// 			if path != "" {
-		// 				fmt.Println("✓ Found pwsh via 'where':", path)
-		// 				foundShells = append(foundShells, path)
-		// 			}
-		// 		}
-		// 	}
-		// }
-
-		// Git Bash
-		gitBashPath := "C:\\Program Files\\Git\\bin\\bash.exe"
-		if _, err := os.Stat(gitBashPath); err == nil {
-			foundShells = append(foundShells, gitBashPath)
-			fmt.Println("✓ Found Git Bash:", gitBashPath)
+			// PowerShell detection via 'where' command
+			whereCmd := exec.Command("where", "pwsh")
+			output, err := whereCmd.Output()
+			if err == nil {
+				paths := strings.Split(strings.TrimSpace(string(output)), "\n")
+				for _, path := range paths {
+					path = strings.TrimSpace(path)
+					if path != "" {
+						foundShells = append(foundShells, path)
+						fmt.Println("✓ Found PowerShell:", path)
+					}
+				}
+			}
+		case "darwin":
+			foundShells = findMacOSShells()
 		}
-
-		// WSL check
-		// wslCmd := exec.Command("wsl.exe", "--list", "--quiet")
-		// output, err := wslCmd.Output()
-		// if err == nil {
-		// 	distros := strings.Split(string(output), "\n")
-		// 	hasWSL := false
-		// 	for _, distro := range distros {
-		// 		distro = strings.TrimSpace(distro)
-		// 		if distro != "" {
-		// 			if !hasWSL {
-		// 				fmt.Println("\n WSL distros found:")
-		// 				hasWSL = true
-		// 			}
-		// 			fmt.Println("   -", distro)
-		// 		}
-		// 	}
-		// 	if hasWSL {
-		// 		fmt.Println("   WSL requires manual setup inside each distro")
-		// 	}
-		// }
 
 		fmt.Printf("\n Total shells found: %d\n", len(foundShells))
 
@@ -410,32 +437,37 @@ var setupCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("\n Installing hooks...")
-
+		fmt.Println("\n  Installing hooks...")
 		successCount := 0
+
 		for _, shellPath := range foundShells {
 			shellInfo := identifyShell(shellPath)
-
 			if shellInfo.Type == "" {
 				continue
 			}
 
 			fmt.Printf("Setting up %s...\n", shellInfo.Name)
-
 			err := addHookToConfigFile(shellInfo, cmdoBinaryPath)
 			if err != nil {
-				fmt.Printf("    Error: %v\n\n", err)
+				fmt.Printf("  Error: %v\n\n", err)
 			} else {
 				successCount++
 			}
 		}
 
-		fmt.Printf("\n Setup complete! (%d/%d shells configured)\n", successCount, len(foundShells))
-		// fmt.Println("\nNext steps:")
-		// fmt.Println("  1. Restart your terminal, OR")
-		// fmt.Println("  2. For Bash: source ~/.bashrc")
-		// fmt.Println("  3. For PowerShell: . $PROFILE")
-		// fmt.Println("\n Test it: Run any command and check 'cmdo list'")
+		fmt.Printf("\nSetup complete! (%d/%d shells configured)\n", successCount, len(foundShells))
+		fmt.Println("\n Next steps:")
+		fmt.Println("  1. Restart your terminal, OR")
+		switch currentOS {
+		case "darwin":
+			fmt.Println("  2. For Zsh: source ~/.zshrc")
+			fmt.Println("  3. For Bash: source ~/.bashrc")
+			fmt.Println("  4. For Fish: source ~/.config/fish/config.fish")
+		default:
+			fmt.Println("  2. For Bash: source ~/.bashrc")
+			fmt.Println("  3. For PowerShell: . $PROFILE")
+		}
+		fmt.Println("\n Test it: Run any command and check 'cmdo list'")
 	},
 }
 
