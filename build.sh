@@ -23,3 +23,11 @@ GOOS=linux GOARCH=arm64 go build -o build/cmdo-linux-arm64
 
 echo "Build complete! Files in ./build/ directory:"
 ls -la build/
+
+
+# dekho mene git hub par 3no files dal di see
+
+# https://github.com/tanu2534/cmdo-release/blob/main/install.sh
+
+# https://github.com/tanu2534/cmdo-release/blob/main/cmdo-macos-arm64
+

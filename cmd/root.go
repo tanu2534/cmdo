@@ -8,9 +8,10 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "cmdo",
-	Short: "cmdo is a Git Bash command logger tool",
-	Long:  "cmdo is a Git Bash command logger tool.",
+	Use:     "cmdo",
+	Version: "1.0.0",
+	Short:   "cmdo is a Git Bash command logger tool",
+	Long:    "cmdo is a Git Bash command logger tool.",
 	Run: func(cmd *cobra.Command, args []string) {
 
 	},
