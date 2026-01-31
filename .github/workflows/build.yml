@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+# IMPORTANT: Workflow ko write permission do
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -93,6 +97,10 @@ jobs:
     needs: build  # Sabhi build jobs complete hone ka wait karega
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    # IMPORTANT: Is job ko bhi explicitly write permission do
+    permissions:
+      contents: write
     
     steps:
       - uses: actions/checkout@v4
