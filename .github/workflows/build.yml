@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS Apple Silicon (M1/M2/M3)
+          # macOS Apple Silicon (M1/M2/M3/M4)
           - os: macos-latest
             goos: darwin
             goarch: arm64
@@ -62,16 +62,56 @@ jobs:
         run: |
           choco install mingw --no-progress
       
+      # Build folder create karo
+      - name: Create build directory
+        run: mkdir -p build
+      
       - name: Build
         env:
           CGO_ENABLED: ${{ matrix.cgo }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CC: ${{ matrix.goos == 'windows' && matrix.goarch == '386' && 'i686-w64-mingw32-gcc' || '' }}
-        run: go build -o ${{ matrix.name }}
+        run: go build -o build/${{ matrix.name }}
       
-      - name: Upload artifact
+      # Upload built binary as artifact (temporary storage)
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: ${{ matrix.name }}
+          path: build/${{ matrix.name }}
+          retention-days: 1
+
+  # Separate job - sabhi builds complete hone ke baad chalega
+  commit-binaries:
+    needs: build  # Sabhi build jobs complete hone ka wait karega
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Create build directory
+      - name: Create build directory
+        run: mkdir -p build
+      
+      # Download all 4 binaries
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: build/
+      
+      # Move files from subdirectories to build/ (artifacts download in folders)
+      - name: Organize binaries
+        run: |
+          find build/ -type f -exec mv {} build/ \;
+          find build/ -type d -empty -delete
+      
+      # Commit aur push - ek saath saari files
+      - name: Commit and push all binaries
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add build/
+          git diff --staged --quiet || git commit -m "Build: Update all binaries [skip ci]"
+          git push
