@@ -10,21 +10,31 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false  # Ek fail ho toh dusre continue karenge
+      fail-fast: false
       matrix:
         include:
+          # macOS Apple Silicon (M1/M2/M3)
           - os: macos-latest
             goos: darwin
             goarch: arm64
             name: cmdo-macos-arm64
             cgo: 1
           
+          # macOS Intel
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            name: cmdo-macos-amd64
+            cgo: 1
+          
+          # Windows 64-bit
           - os: windows-latest
             goos: windows
             goarch: amd64
             name: cmdo-windows-amd64.exe
             cgo: 1
           
+          # Windows 32-bit (Ubuntu se cross-compile)
           - os: ubuntu-latest
             goos: windows
             goarch: 386
