@@ -6,12 +6,12 @@ A cross-platform command logger tool for tracking and managing command line hist
 
 ### Windows
 ```powershell
-iwr -useb https://raw.githubusercontent.com/tanu2534/cmdo-release/main/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/tanu2534/cmdo/main/build/install.ps1 | iex
 ```
 
 ### macOS/Linux
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tanu2534/cmdo-release/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tanu2534/cmdo/main/build/install.sh | bash
 ```
 
 ## Setup
