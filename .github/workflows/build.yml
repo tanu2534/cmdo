@@ -96,28 +96,72 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history fetch karo for clean git operations
       
       # Create build directory
       - name: Create build directory
         run: mkdir -p build
       
-      # Download all 4 binaries
-      - name: Download all artifacts
+      # Download all 4 binaries - ek ek karke with proper error handling
+      - name: Download macOS ARM64 binary
         uses: actions/download-artifact@v4
         with:
-          path: build/
+          name: cmdo-macos-arm64
+          path: build-temp/
+        continue-on-error: false
       
-      # Move files from subdirectories to build/ (artifacts download in folders)
+      - name: Download macOS AMD64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cmdo-macos-amd64
+          path: build-temp/
+        continue-on-error: false
+      
+      - name: Download Windows AMD64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cmdo-windows-amd64.exe
+          path: build-temp/
+        continue-on-error: false
+      
+      - name: Download Windows 386 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cmdo-windows-386.exe
+          path: build-temp/
+        continue-on-error: false
+      
+      # Move files to build directory (artifacts download with nested folder structure)
       - name: Organize binaries
         run: |
-          find build/ -type f -exec mv {} build/ \;
-          find build/ -type d -empty -delete
+          # List kya download hua
+          echo "Downloaded files:"
+          find build-temp/ -type f
+          
+          # Sab files ko build/ mein move karo
+          find build-temp/ -type f -name "cmdo*" -exec cp {} build/ \;
+          
+          # Verify
+          echo "Final build directory:"
+          ls -lh build/
       
       # Commit aur push - ek saath saari files
       - name: Commit and push all binaries
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
+          
+          # Latest changes pull karo
+          git pull origin main --rebase
+          
+          # Build folder add karo
           git add build/
-          git diff --staged --quiet || git commit -m "Build: Update all binaries [skip ci]"
-          git push
+          
+          # Check if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Build: Update all binaries [skip ci]"
+            git push origin main
+          fi
