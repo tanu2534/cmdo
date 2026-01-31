@@ -62,8 +62,14 @@ jobs:
         run: |
           choco install mingw --no-progress
       
-      # Build folder create karo
-      - name: Create build directory
+      # Build folder create karo (Cross-platform way)
+      - name: Create build directory (Windows)
+        if: runner.os == 'Windows'
+        run: New-Item -ItemType Directory -Force -Path build
+        shell: pwsh
+      
+      - name: Create build directory (Unix)
+        if: runner.os != 'Windows'
         run: mkdir -p build
       
       - name: Build
