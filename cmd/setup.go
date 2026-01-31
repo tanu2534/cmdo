@@ -413,18 +413,49 @@ var setupCmd = &cobra.Command{
 				fmt.Println("✓ Found Git Bash:", gitBashPath)
 			}
 
-			// PowerShell detection via 'where' command
+			// PowerShell Core (pwsh) detection
 			whereCmd := exec.Command("where", "pwsh")
 			output, err := whereCmd.Output()
 			if err == nil {
-				paths := strings.Split(strings.TrimSpace(string(output)), "\n")
+				paths := strings.Split(strings.TrimSpace(string(output)), "\r\n")
 				for _, path := range paths {
 					path = strings.TrimSpace(path)
 					if path != "" {
 						foundShells = append(foundShells, path)
-						fmt.Println("✓ Found PowerShell:", path)
+						fmt.Println("✓ Found PowerShell Core:", path)
 					}
 				}
+			}
+
+			// Windows PowerShell detection
+			wherePSCmd := exec.Command("where", "powershell")
+			psOutput, psErr := wherePSCmd.Output()
+			if psErr == nil {
+				paths := strings.Split(strings.TrimSpace(string(psOutput)), "\r\n")
+				for _, path := range paths {
+					path = strings.TrimSpace(path)
+					if path != "" {
+						// Avoid duplicates
+						isDuplicate := false
+						for _, existing := range foundShells {
+							if existing == path {
+								isDuplicate = true
+								break
+							}
+						}
+						if !isDuplicate {
+							foundShells = append(foundShells, path)
+							fmt.Println("✓ Found Windows PowerShell:", path)
+						}
+					}
+				}
+			}
+
+			// CMD detection
+			cmdPath := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+			if _, err := os.Stat(cmdPath); err == nil {
+				foundShells = append(foundShells, cmdPath)
+				fmt.Println("✓ Found CMD:", cmdPath)
 			}
 		case "darwin":
 			foundShells = findMacOSShells()
