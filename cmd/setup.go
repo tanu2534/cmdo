@@ -75,17 +75,31 @@ func identifyShell(shell string) shellInfo {
 }
 
 func getPowerShellProfile() string {
-	userProfile := os.Getenv("USERPROFILE")
-	psCorePath := filepath.Join(userProfile, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
-	winPSPath := filepath.Join(userProfile, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
-
-	if _, err := os.Stat(psCorePath); err == nil {
-		return psCorePath
+	// First, try to get the actual profile path from PowerShell itself
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", "echo $PROFILE")
+	output, err := cmd.Output()
+	if err == nil {
+		profilePath := strings.TrimSpace(string(output))
+		if profilePath != "" {
+			return profilePath
+		}
 	}
+
+	// Fallback to manual detection if PowerShell command fails
+	userProfile := os.Getenv("USERPROFILE")
+	winPSPath := filepath.Join(userProfile, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
+	psCorePath := filepath.Join(userProfile, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
+
+	// Check which one exists, prefer the one that exists
 	if _, err := os.Stat(winPSPath); err == nil {
 		return winPSPath
 	}
-	return psCorePath
+	if _, err := os.Stat(psCorePath); err == nil {
+		return psCorePath
+	}
+	
+	// If neither exists, return the Windows PowerShell path (most common)
+	return winPSPath
 }
 
 func getPowerShellHook(cmdoBinaryPath string) string {
