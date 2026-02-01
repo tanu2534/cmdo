@@ -4,7 +4,7 @@ A cross-platform command logger tool for tracking and managing command line hist
 
 ## Installation
 
-### Windows
+### Windows Powershell
 ```powershell
 iwr -useb https://raw.githubusercontent.com/tanu2534/cmdo/main/build/install.ps1 | iex
 ```
