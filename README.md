@@ -23,8 +23,7 @@ cmdo setup
 ## Usage
 - `cmdo setup` - Configure shell hooks
 - `cmdo serve` - Start web UI (http://localhost:8089)
-- `cmdo logs` - View command history
-- `cmdo cleanup` - Remove hooks
+- `cmdo cleanup` - Remove hooks from shells
 
 ## Commands
 - `cmdo --help` - Show help
