@@ -563,7 +563,7 @@ var setupCmd = &cobra.Command{
 			fmt.Println("  2. For Bash: source ~/.bashrc")
 			fmt.Println("  3. For PowerShell: . $PROFILE")
 		}
-		fmt.Println("\n Test it: Run any command and check 'cmdo list'")
+		fmt.Println("\n Test it: Run any command and check 'cmdo serve'")
 	},
 }
 
