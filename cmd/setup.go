@@ -31,10 +31,19 @@ func identifyShell(shell string) shellInfo {
 				Type:       "cmd",
 			}
 		} else if strings.Contains(exepath, "powershell.exe") || strings.Contains(exepath, "pwsh.exe") {
+			// Get profile path specific to THIS PowerShell executable
+			profilePath := getPowerShellProfileForExe(shell)
+			shellName := "PowerShell"
+			if strings.Contains(exepath, "pwsh.exe") {
+				shellName = "PowerShell Core"
+			} else {
+				shellName = "Windows PowerShell"
+			}
+			
 			return shellInfo{
-				Name:       "PowerShell",
+				Name:       shellName,
 				ExePath:    exepath,
-				ConfigPath: getPowerShellProfile(),
+				ConfigPath: profilePath,
 				Type:       "powershell",
 			}
 		} else if strings.Contains(exepath, "bash.exe") {
@@ -74,9 +83,9 @@ func identifyShell(shell string) shellInfo {
 	return shellInfo{}
 }
 
-func getPowerShellProfile() string {
-	// First, try to get the actual profile path from PowerShell itself
-	cmd := exec.Command("powershell", "-NoProfile", "-Command", "echo $PROFILE")
+func getPowerShellProfileForExe(psExePath string) string {
+	// Run the specific PowerShell executable to get ITS profile path
+	cmd := exec.Command(psExePath, "-NoProfile", "-Command", "echo $PROFILE")
 	output, err := cmd.Output()
 	if err == nil {
 		profilePath := strings.TrimSpace(string(output))
@@ -85,67 +94,87 @@ func getPowerShellProfile() string {
 		}
 	}
 
-	// Fallback to manual detection if PowerShell command fails
+	// Fallback: determine based on executable name
+	exepath := strings.ToLower(psExePath)
 	userProfile := os.Getenv("USERPROFILE")
-	winPSPath := filepath.Join(userProfile, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
-	psCorePath := filepath.Join(userProfile, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
-
-	// Check which one exists, prefer the one that exists
-	if _, err := os.Stat(winPSPath); err == nil {
-		return winPSPath
+	
+	if strings.Contains(exepath, "pwsh.exe") {
+		// PowerShell Core (7+)
+		return filepath.Join(userProfile, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
+	} else {
+		// Windows PowerShell (5.1)
+		return filepath.Join(userProfile, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
 	}
+}
+
+func getPowerShellProfile() string {
+	userProfile := os.Getenv("USERPROFILE")
+	psCorePath := filepath.Join(userProfile, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
+	winPSPath := filepath.Join(userProfile, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
+
 	if _, err := os.Stat(psCorePath); err == nil {
 		return psCorePath
 	}
-	
-	// If neither exists, return the Windows PowerShell path (most common)
-	return winPSPath
+	if _, err := os.Stat(winPSPath); err == nil {
+		return winPSPath
+	}
+	return psCorePath
 }
 
 func getPowerShellHook(cmdoBinaryPath string) string {
+	// Escape backslashes in the path for PowerShell
+	escapedPath := strings.ReplaceAll(cmdoBinaryPath, `\`, `\\`)
+	
 	return fmt.Sprintf(`
 # CMDO Command Logger Hook
-$Global:__CmdoLastHistoryId = -1
+$Global:__CmdoLastHistoryCount = 0
+$Global:__CmdoInitialized = $false
 
-function Invoke-CmdoLog {
-	$history = Get-History -Count 1 -ErrorAction SilentlyContinue
-	if ($history -and $history.Id -ne $Global:__CmdoLastHistoryId) {
-		$Global:__CmdoLastHistoryId = $history.Id
-		$lastCommand = $history.CommandLine
-		$exitCode = 0
-		if ($history.ExecutionStatus -eq 'Failed') {
-			$exitCode = 1
-		}
-		$currentDir = $PWD.Path
-		if ($lastCommand) {
-			try {
-				& '%s' log --command "$lastCommand" --exit-code $exitCode --pwd "$currentDir" 2>$null
-			} catch {
-				# Silently ignore logging errors
-			}
-		}
-	}
-}
-
+# Save original prompt if it exists
 if (Test-Path Function:\prompt) {
-	$Global:__CmdoOriginalPromptDef = ${function:prompt}.ToString()
+	$Global:__CmdoOriginalPrompt = ${function:prompt}
 }
 
 function Global:prompt {
-	$Global:__CmdoLastExitCode = $LASTEXITCODE
-	$Global:__CmdoLastSuccess = $?
-	Invoke-CmdoLog
-	$global:LASTEXITCODE = $Global:__CmdoLastExitCode
+	# Capture the exit code FIRST before any other commands
+	$cmdoExitCode = $LASTEXITCODE
+	if ($null -eq $cmdoExitCode) { $cmdoExitCode = 0 }
 	
-	if ($Global:__CmdoOriginalPromptDef) {
-		$result = Invoke-Expression $Global:__CmdoOriginalPromptDef
-		if ($result) {
-			return $result
-		}
+	# Get current history count
+	$currentHistoryCount = (Get-History -ErrorAction SilentlyContinue | Measure-Object).Count
+	
+	# Skip logging on first prompt (initialization)
+	if (-not $Global:__CmdoInitialized) {
+		$Global:__CmdoInitialized = $true
+		$Global:__CmdoLastHistoryCount = $currentHistoryCount
 	}
-	"PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) "
+	# Log if a new command was executed
+	elseif ($currentHistoryCount -gt $Global:__CmdoLastHistoryCount) {
+		$lastEntry = Get-History -Count 1 -ErrorAction SilentlyContinue
+		if ($lastEntry) {
+			$cmdoCommand = $lastEntry.CommandLine
+			$cmdoDir = $PWD.Path
+			
+			# Call cmdo log in the background to avoid delays
+			Start-Job -ScriptBlock {
+				param($path, $cmd, $exit, $dir)
+				& $path log --command $cmd --exit-code $exit --pwd $dir 2>$null
+			} -ArgumentList "%s", $cmdoCommand, $cmdoExitCode, $cmdoDir | Out-Null
+		}
+		$Global:__CmdoLastHistoryCount = $currentHistoryCount
+	}
+	
+	# Restore LASTEXITCODE for user scripts
+	$global:LASTEXITCODE = $cmdoExitCode
+	
+	# Call original prompt if it exists
+	if ($Global:__CmdoOriginalPrompt) {
+		& $Global:__CmdoOriginalPrompt
+	} else {
+		"PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) "
+	}
 }
-`, cmdoBinaryPath)
+`, escapedPath)
 }
 
 func getBashHook(cmdoBinaryPath string) string {
