@@ -129,11 +129,17 @@ func InsertCmd(cmd string, code string, dir string) {
 
 	sqlStmt := `INSERT INTO commands(command, exit_code, directory, timestamp) VALUES(?, ?, ?, ?)`
 
-	// IST timezone mein time store karo
-	ist, _ := time.LoadLocation("Asia/Kolkata")
-	timestamp := time.Now().In(ist).Format("2006-01-02 15:04:05")
+	// Try to load IST, fallback to local time if fails
+	var timestamp string
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		// Fallback to local time on Windows or if timezone DB missing
+		timestamp = time.Now().Format("2006-01-02 15:04:05")
+	} else {
+		timestamp = time.Now().In(ist).Format("2006-01-02 15:04:05")
+	}
 
-	_, err := DB.Exec(sqlStmt, cmd, code, dir, timestamp)
+	_, err = DB.Exec(sqlStmt, cmd, code, dir, timestamp)
 	if err != nil {
 		log.Printf("Error inserting data: %s\n", err)
 	}
