@@ -126,13 +126,24 @@ func getPowerShellHook(cmdoBinaryPath string) string {
 	escapedPath := strings.ReplaceAll(cmdoBinaryPath, `\`, `\\`)
 	
 	return fmt.Sprintf(`
-# CMDO Command Logger Hook
+# CMDO Command Logger Hook - DEBUG VERSION
 $Global:__CmdoLastHistoryCount = 0
 $Global:__CmdoInitialized = $false
+$Global:__CmdoDebugLog = "$env:USERPROFILE\.cmdo\debug.log"
+
+# Debug logging function
+function Write-CmdoDebug {
+	param($message)
+	$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+	"[$timestamp] $message" | Out-File -Append -FilePath $Global:__CmdoDebugLog -ErrorAction SilentlyContinue
+}
+
+Write-CmdoDebug "=== CMDO Hook Loaded ==="
 
 # Save original prompt if it exists
 if (Test-Path Function:\prompt) {
 	$Global:__CmdoOriginalPrompt = ${function:prompt}
+	Write-CmdoDebug "Original prompt saved"
 }
 
 function Global:prompt {
@@ -143,10 +154,13 @@ function Global:prompt {
 	# Get current history count
 	$currentHistoryCount = (Get-History -ErrorAction SilentlyContinue | Measure-Object).Count
 	
+	Write-CmdoDebug "Prompt called - HistoryCount: $currentHistoryCount, LastCount: $Global:__CmdoLastHistoryCount, ExitCode: $cmdoExitCode"
+	
 	# Skip logging on first prompt (initialization)
 	if (-not $Global:__CmdoInitialized) {
 		$Global:__CmdoInitialized = $true
 		$Global:__CmdoLastHistoryCount = $currentHistoryCount
+		Write-CmdoDebug "Initialized - skipping first prompt"
 	}
 	# Log if a new command was executed
 	elseif ($currentHistoryCount -gt $Global:__CmdoLastHistoryCount) {
@@ -155,13 +169,21 @@ function Global:prompt {
 			$cmdoCommand = $lastEntry.CommandLine
 			$cmdoDir = $PWD.Path
 			
-			# Call cmdo log in the background to avoid delays
-			Start-Job -ScriptBlock {
-				param($path, $cmd, $exit, $dir)
-				& $path log --command $cmd --exit-code $exit --pwd $dir 2>$null
-			} -ArgumentList "%s", $cmdoCommand, $cmdoExitCode, $cmdoDir | Out-Null
+			Write-CmdoDebug "Logging command: $cmdoCommand (exit: $cmdoExitCode, dir: $cmdoDir)"
+			
+			# Call cmdo log directly (synchronous for debugging)
+			try {
+				& "%s" log --command "$cmdoCommand" --exit-code $cmdoExitCode --pwd "$cmdoDir" 2>&1 | Out-File -Append -FilePath $Global:__CmdoDebugLog
+				Write-CmdoDebug "Log command completed"
+			} catch {
+				Write-CmdoDebug "ERROR: $($_.Exception.Message)"
+			}
+		} else {
+			Write-CmdoDebug "No history entry found"
 		}
 		$Global:__CmdoLastHistoryCount = $currentHistoryCount
+	} else {
+		Write-CmdoDebug "No new commands to log"
 	}
 	
 	# Restore LASTEXITCODE for user scripts
