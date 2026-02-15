@@ -6,7 +6,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -122,10 +124,57 @@ func InitDB(path string) {
 	// fmt.Println("DB Initialized")
 }
 
+// Sensitive patterns to filter
+var sensitivePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(password|passwd|pwd)\s*[=:]\s*[^\s]+`),
+	regexp.MustCompile(`(?i)(api[_-]?key|apikey|access[_-]?key)\s*[=:]\s*[^\s]+`),
+	regexp.MustCompile(`(?i)(token|auth[_-]?token|bearer)\s*[=:]\s*[^\s]+`),
+	regexp.MustCompile(`(?i)(secret|secret[_-]?key)\s*[=:]\s*[^\s]+`),
+	regexp.MustCompile(`(?i)-p\s+[^\s]+`),                    // -p password
+	regexp.MustCompile(`(?i)--password[=\s]+[^\s]+`),         // --password=xxx
+	regexp.MustCompile(`[a-zA-Z0-9]{32,}`),                    // Long tokens/hashes
+	regexp.MustCompile(`(?i)mysql.*-p[^\s]*`),                 // mysql -p
+	regexp.MustCompile(`(?i)psql.*password`),                  // psql password
+	regexp.MustCompile(`(?i)(aws|gcp|azure).*key`),            // Cloud keys
+	regexp.MustCompile(`(?i)export\s+.*(?:KEY|TOKEN|SECRET)`), // export KEY=
+}
+
+// Filter sensitive data from command
+func filterSensitiveData(cmd string) string {
+	// Skip if command is too short
+	if len(cmd) < 5 {
+		return cmd
+	}
+
+	filtered := cmd
+	lower := strings.ToLower(cmd)
+
+	// Check for sensitive patterns
+	for _, pattern := range sensitivePatterns {
+		if pattern.MatchString(filtered) {
+			filtered = pattern.ReplaceAllString(filtered, "[REDACTED]")
+		}
+	}
+
+	// Check for common sensitive commands
+	if strings.Contains(lower, "password") ||
+		strings.Contains(lower, "token") ||
+		strings.Contains(lower, "secret") ||
+		strings.Contains(lower, "api_key") ||
+		strings.Contains(lower, "apikey") {
+		return "[SENSITIVE COMMAND REDACTED]"
+	}
+
+	return filtered
+}
+
 func InsertCmd(cmd string, code string, dir string) {
 	if DB == nil {
 		log.Fatal("DB is not initialized. Call InitDB first.")
 	}
+
+	// Filter sensitive data
+	cmd = filterSensitiveData(cmd)
 
 	sqlStmt := `INSERT INTO commands(command, exit_code, directory, timestamp) VALUES(?, ?, ?, ?)`
 

@@ -258,10 +258,24 @@ function formatTimestamp(date) {
    let commands = [];
     let searchQuery = '';
     let expandedFolders = {};
+    let authToken = '';
+
+// Get auth token on load
+async function initAuth() {
+  try {
+    const response = await fetch('/api/token');
+    const data = await response.json();
+    authToken = data.token;
+  } catch (error) {
+    console.error('Failed to get auth token:', error);
+  }
+}
 
 async function fetchCommands() {
   try {
-    const response = await fetch('/api/commands');
+    const response = await fetch('/api/commands', {
+      headers: { 'X-Auth-Token': authToken }
+    });
     const data = await response.json();
     commands = data.map(cmd => {
       // SQLite format: "2025-10-24 22:04:14" ko local time banao
@@ -304,7 +318,10 @@ async function fetchCommands() {
       try {
         const response = await fetch('/api/delete', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Auth-Token': authToken 
+          },
           body: JSON.stringify({ id })
         });
 
@@ -325,7 +342,8 @@ async function fetchCommands() {
 
       try {
         const response = await fetch('/api/clear', {
-          method: 'POST'
+          method: 'POST',
+          headers: { 'X-Auth-Token': authToken }
         });
 
         if (response.ok) {
@@ -534,7 +552,7 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
       render();
     });
     // Initial render
-    fetchCommands();
+    initAuth().then(() => fetchCommands());
   </script>
 </body>
 </html>

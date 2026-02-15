@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"crypto/rand"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -9,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/tanu2534/cmdo/database"
@@ -57,20 +60,31 @@ var serveCmd = &cobra.Command{
 		database.InitDB(dbPath)
 		defer database.DB.Close()
 
-		// API endpoints
-		http.HandleFunc("/api/commands", apiCommandsHandler)
-		http.HandleFunc("/api/delete", apiDeleteHandler)
-		http.HandleFunc("/api/clear", apiClearHandler)
-		http.HandleFunc("/api/stats", apiStatsHandler)
+		// Generate session token
+		token := generateToken()
+		tokenFile := filepath.Join(homeDir, ".cmdo", ".session")
+		os.WriteFile(tokenFile, []byte(token), 0600)
+
+		// API endpoints with auth
+		http.HandleFunc("/api/commands", authMiddleware(apiCommandsHandler, token))
+		http.HandleFunc("/api/delete", authMiddleware(apiDeleteHandler, token))
+		http.HandleFunc("/api/clear", authMiddleware(apiClearHandler, token))
+		http.HandleFunc("/api/stats", authMiddleware(apiStatsHandler, token))
+		http.HandleFunc("/api/token", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"token": token})
+		})
 
 		// Serve HTML page
 		http.HandleFunc("/", indexHandler)
 
 		fmt.Printf("CMDO Server running at http://localhost:%s\n", port)
 		fmt.Printf(" Using database: %s\n", dbPath)
+		fmt.Printf(" Session token: %s\n", token)
 		fmt.Println(" Auto-cleanup: Keeps last 1000 commands or 30 days (whichever is more)")
+		fmt.Println(" Security: Token-based auth + localhost-only CORS")
 		fmt.Println("Press Ctrl+C to stop")
-		log.Fatal(http.ListenAndServe(":"+port, nil))
+		log.Fatal(http.ListenAndServe("127.0.0.1:"+port, nil))
 	},
 }
 
@@ -94,9 +108,43 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, nil)
 }
 
+func generateToken() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func authMiddleware(next http.HandlerFunc, validToken string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// CORS - only localhost
+		origin := r.Header.Get("Origin")
+		if origin != "" && (strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://127.0.0.1:")) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token")
+		}
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(200)
+			return
+		}
+
+		// Check token
+		token := r.Header.Get("X-Auth-Token")
+		if token == "" {
+			token = r.URL.Query().Get("token")
+		}
+		if token != validToken {
+			http.Error(w, "Unauthorized", 401)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
 func apiCommandsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	rows, err := database.DB.Query(`
 		SELECT id, command, exit_code, timestamp, directory 
@@ -167,7 +215,6 @@ func apiClearHandler(w http.ResponseWriter, r *http.Request) {
 
 func apiStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	var stats StatsJSON
 
