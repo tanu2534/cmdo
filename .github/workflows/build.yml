@@ -63,7 +63,7 @@ jobs:
             goarch: 386
             name: cmdo-linux-386
             cgo: 1
-            cc: ''
+            cc: 'gcc -m32'
           
           # Linux ARM64 (Raspberry Pi 4, AWS Graviton, etc.)
           - os: ubuntu-latest
@@ -95,6 +95,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-i686
+      
+      # Linux 32-bit ke liye multilib support
+      - name: Install multilib for Linux 386
+        if: matrix.goos == 'linux' && matrix.goarch == '386'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib g++-multilib
       
       # Linux ARM builds ke liye cross-compilation tools
       - name: Install cross-compilation tools for ARM (Linux)
