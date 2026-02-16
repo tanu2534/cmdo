@@ -44,6 +44,34 @@ jobs:
             goarch: 386
             name: cmdo-windows-386.exe
             cgo: 1
+          
+          # Linux 64-bit (AMD64)
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            name: cmdo-linux-amd64
+            cgo: 1
+          
+          # Linux 32-bit (386)
+          - os: ubuntu-latest
+            goos: linux
+            goarch: 386
+            name: cmdo-linux-386
+            cgo: 1
+          
+          # Linux ARM64 (Raspberry Pi 4, AWS Graviton, etc.)
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            name: cmdo-linux-arm64
+            cgo: 1
+          
+          # Linux ARM (Raspberry Pi 3 aur older)
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm
+            name: cmdo-linux-arm
+            cgo: 1
     
     steps:
       - uses: actions/checkout@v4
@@ -59,6 +87,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-i686
+      
+      # Linux ARM builds ke liye cross-compilation tools
+      - name: Install cross-compilation tools for ARM (Linux)
+        if: matrix.goos == 'linux' && (matrix.goarch == 'arm' || matrix.goarch == 'arm64')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
       
       # Windows 64-bit ke liye MinGW setup (Windows runner pe)
       - name: Setup MinGW for Windows 64-bit
@@ -81,7 +116,10 @@ jobs:
           CGO_ENABLED: ${{ matrix.cgo }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CC: ${{ matrix.goos == 'windows' && matrix.goarch == '386' && 'i686-w64-mingw32-gcc' || '' }}
+          CC: ${{ (matrix.goos == 'windows' && matrix.goarch == '386' && 'i686-w64-mingw32-gcc') ||
+            (matrix.goos == 'linux' && matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc') ||
+            (matrix.goos == 'linux' && matrix.goarch == 'arm' && 'arm-linux-gnueabihf-gcc') }}
+          
         run: go build -o build/${{ matrix.name }}
       
       # Upload built binary as artifact (temporary storage)
@@ -112,7 +150,7 @@ jobs:
       - name: Create build directory
         run: mkdir -p build
       
-      # Download all 4 binaries - ek ek karke with proper error handling
+      # Download all binaries - macOS
       - name: Download macOS ARM64 binary
         uses: actions/download-artifact@v4
         with:
@@ -127,6 +165,7 @@ jobs:
           path: build-temp/
         continue-on-error: false
       
+      # Download Windows binaries
       - name: Download Windows AMD64 binary
         uses: actions/download-artifact@v4
         with:
@@ -138,6 +177,35 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cmdo-windows-386.exe
+          path: build-temp/
+        continue-on-error: false
+      
+      # Download Linux binaries
+      - name: Download Linux AMD64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cmdo-linux-amd64
+          path: build-temp/
+        continue-on-error: false
+      
+      - name: Download Linux 386 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cmdo-linux-386
+          path: build-temp/
+        continue-on-error: false
+      
+      - name: Download Linux ARM64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cmdo-linux-arm64
+          path: build-temp/
+        continue-on-error: false
+      
+      - name: Download Linux ARM binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cmdo-linux-arm
           path: build-temp/
         continue-on-error: false
       
