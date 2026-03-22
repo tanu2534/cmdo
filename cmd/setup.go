@@ -39,7 +39,7 @@ func identifyShell(shell string) shellInfo {
 			} else {
 				shellName = "Windows PowerShell"
 			}
-			
+
 			return shellInfo{
 				Name:       shellName,
 				ExePath:    exepath,
@@ -85,7 +85,7 @@ func identifyShell(shell string) shellInfo {
 
 func getPowerShellProfileForExe(psExePath string) string {
 	// Run the specific PowerShell executable to get ITS profile path
-	cmd := exec.Command(psExePath, "-NoProfile", "-Command", "echo $PROFILE")
+	cmd := exec.Command(psExePath, "-NoProfile", "-Command", "$PROFILE.CurrentUserAllHosts")
 	output, err := cmd.Output()
 	if err == nil {
 		profilePath := strings.TrimSpace(string(output))
@@ -97,20 +97,20 @@ func getPowerShellProfileForExe(psExePath string) string {
 	// Fallback: determine based on executable name
 	exepath := strings.ToLower(psExePath)
 	userProfile := os.Getenv("USERPROFILE")
-	
+
 	if strings.Contains(exepath, "pwsh.exe") {
 		// PowerShell Core (7+)
-		return filepath.Join(userProfile, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
+		return filepath.Join(userProfile, "Documents", "PowerShell", "profile.ps1")
 	} else {
 		// Windows PowerShell (5.1)
-		return filepath.Join(userProfile, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
+		return filepath.Join(userProfile, "Documents", "WindowsPowerShell", "profile.ps1")
 	}
 }
 
 func getPowerShellProfile() string {
 	userProfile := os.Getenv("USERPROFILE")
-	psCorePath := filepath.Join(userProfile, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
-	winPSPath := filepath.Join(userProfile, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
+	psCorePath := filepath.Join(userProfile, "Documents", "PowerShell", "profile.ps1")
+	winPSPath := filepath.Join(userProfile, "Documents", "WindowsPowerShell", "profile.ps1")
 
 	if _, err := os.Stat(psCorePath); err == nil {
 		return psCorePath
