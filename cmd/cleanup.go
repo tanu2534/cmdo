@@ -228,13 +228,6 @@ func cleanupExcessiveNewlines(content string) string {
 	return content
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 var cleanupCmd = &cobra.Command{
 	Use:     "cleanup",
 	Aliases: []string{"uninstall", "remove"},

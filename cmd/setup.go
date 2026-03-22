@@ -124,7 +124,7 @@ func getPowerShellProfile() string {
 func getPowerShellHook(cmdoBinaryPath string) string {
 	// Escape backslashes in the path for PowerShell
 	escapedPath := strings.ReplaceAll(cmdoBinaryPath, `\`, `\\`)
-	
+
 	return fmt.Sprintf(`
 # CMDO Command Logger Hook - DEBUG VERSION
 $Global:__CmdoLastHistoryCount = 0
@@ -188,7 +188,7 @@ function Global:prompt {
 	
 	# Restore LASTEXITCODE for user scripts
 	$global:LASTEXITCODE = $cmdoExitCode
-	
+
 	# Call original prompt if it exists
 	if ($Global:__CmdoOriginalPrompt) {
 		& $Global:__CmdoOriginalPrompt
@@ -196,7 +196,29 @@ function Global:prompt {
 		"PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) "
 	}
 }
-`, escapedPath)
+
+# CMDO Autosuggestion Hook
+if (Get-Module -ListAvailable -Name PSReadLine) {
+	Set-PSReadLineKeyHandler -Key Tab -ScriptBlock {
+		$line = $null
+		$cursor = $null
+		[Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+		if ($line.Length -ge 3) {
+			$dir = $PWD.Path
+			$suggestions = & "%s" completions --query "$line" --dir "$dir" 2>$null
+			if ($suggestions) {
+				$selected = $suggestions | Out-GridView -Title "CMDO Suggestions" -OutputMode Single
+				if ($selected) {
+					[Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+					[Microsoft.PowerShell.PSConsoleReadLine]::Insert($selected)
+				}
+			}
+		} else {
+			[Microsoft.PowerShell.PSConsoleReadLine]::TabCompleteNext()
+		}
+	}
+}
+`, escapedPath, escapedPath)
 }
 
 func getBashHook(cmdoBinaryPath string) string {
@@ -232,7 +254,22 @@ function __cmdo_log() {
 if [[ ! "$PROMPT_COMMAND" =~ "__cmdo_capture_exit" ]]; then
 	PROMPT_COMMAND="__cmdo_capture_exit; __cmdo_log${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 fi
-`, cmdoBinaryPath)
+
+# CMDO Autosuggestion
+function __cmdo_suggest() {
+	local query="${READLINE_LINE}"
+	if [ "${#query}" -lt 3 ]; then
+		return
+	fi
+	local selected
+	selected=$("%s" completions --query "$query" --dir "$(pwd)" 2>/dev/null | fzf --height 40%% --reverse --prompt="CMDO> " --query="$query")
+	if [ -n "$selected" ]; then
+		READLINE_LINE="$selected"
+		READLINE_POINT=${#READLINE_LINE}
+	fi
+}
+bind -x '"\t":__cmdo_suggest'
+`, cmdoBinaryPath, cmdoBinaryPath)
 }
 
 func getZshHook(cmdoBinaryPath string) string {
@@ -248,7 +285,7 @@ function __cmdo_preexec() {
 function __cmdo_precmd() {
 	__cmdo_last_exit_code=$?
 	local current_dir=$(pwd)
-	
+
 	if [ "$__cmdo_initialized" -eq 0 ]; then
 		__cmdo_initialized=1
 		return
@@ -263,7 +300,25 @@ function __cmdo_precmd() {
 autoload -Uz add-zsh-hook
 add-zsh-hook preexec __cmdo_preexec
 add-zsh-hook precmd __cmdo_precmd
-`, cmdoBinaryPath)
+
+# CMDO Autosuggestion
+function __cmdo_suggest() {
+	local query="$BUFFER"
+	if [ "${#query}" -lt 3 ]; then
+		zle expand-or-complete
+		return
+	fi
+	local selected
+	selected=$("%s" completions --query "$query" --dir "$(pwd)" 2>/dev/null | fzf --height 40%% --reverse --prompt="CMDO> " --query="$query")
+	if [ -n "$selected" ]; then
+		BUFFER="$selected"
+		CURSOR=${#BUFFER}
+		zle redisplay
+	fi
+}
+zle -N __cmdo_suggest
+bindkey "\t" __cmdo_suggest
+`, cmdoBinaryPath, cmdoBinaryPath)
 }
 
 func getFishHook(cmdoBinaryPath string) string {
@@ -274,7 +329,20 @@ function __cmdo_log --on-event fish_postexec
 	set -l current_dir (pwd)
 	"%s" log --command "$argv[1]" --exit-code $exit_code --pwd "$current_dir" 2>/dev/null
 end
-`, cmdoBinaryPath)
+
+# CMDO Autosuggestion
+function __cmdo_suggest
+	set -l query (commandline)
+	if test (string length -- $query) -lt 3
+		return
+	end
+	set -l selected ("%s" completions --query "$query" --dir (pwd) 2>/dev/null | fzf --height 40%% --reverse --prompt="CMDO> " --query="$query")
+	if test -n "$selected"
+		commandline -- $selected
+	end
+end
+bind \t __cmdo_suggest
+`, cmdoBinaryPath, cmdoBinaryPath)
 }
 
 func addHookToConfigFile(shellInfo shellInfo, cmdoBinaryPath string) error {
