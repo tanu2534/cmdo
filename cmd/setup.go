@@ -31,7 +31,6 @@ func identifyShell(shell string) shellInfo {
 				Type:       "cmd",
 			}
 		} else if strings.Contains(exepath, "powershell.exe") || strings.Contains(exepath, "pwsh.exe") {
-			// Get profile path specific to THIS PowerShell executable
 			profilePath := getPowerShellProfileForExe(shell)
 			shellName := "PowerShell"
 			if strings.Contains(exepath, "pwsh.exe") {
@@ -55,7 +54,6 @@ func identifyShell(shell string) shellInfo {
 			}
 		}
 	case "darwin":
-		// macOS shells
 		if strings.Contains(exepath, "zsh") {
 			return shellInfo{
 				Name:       "Zsh",
@@ -84,7 +82,6 @@ func identifyShell(shell string) shellInfo {
 }
 
 func getPowerShellProfileForExe(psExePath string) string {
-	// Run the specific PowerShell executable to get ITS profile path
 	cmd := exec.Command(psExePath, "-NoProfile", "-Command", "$PROFILE.CurrentUserAllHosts")
 	output, err := cmd.Output()
 	if err == nil {
@@ -94,17 +91,13 @@ func getPowerShellProfileForExe(psExePath string) string {
 		}
 	}
 
-	// Fallback: determine based on executable name
 	exepath := strings.ToLower(psExePath)
 	userProfile := os.Getenv("USERPROFILE")
 
 	if strings.Contains(exepath, "pwsh.exe") {
-		// PowerShell Core (7+)
 		return filepath.Join(userProfile, "Documents", "PowerShell", "profile.ps1")
-	} else {
-		// Windows PowerShell (5.1)
-		return filepath.Join(userProfile, "Documents", "WindowsPowerShell", "profile.ps1")
 	}
+	return filepath.Join(userProfile, "Documents", "WindowsPowerShell", "profile.ps1")
 }
 
 func getPowerShellProfile() string {
@@ -118,20 +111,18 @@ func getPowerShellProfile() string {
 	if _, err := os.Stat(winPSPath); err == nil {
 		return winPSPath
 	}
-	return psCorePath
+	return winPSPath
 }
 
 func getPowerShellHook(cmdoBinaryPath string) string {
-	// Escape backslashes in the path for PowerShell
 	escapedPath := strings.ReplaceAll(cmdoBinaryPath, `\`, `\\`)
 
 	return fmt.Sprintf(`
-# CMDO Command Logger Hook - DEBUG VERSION
+# CMDO Command Logger Hook
 $Global:__CmdoLastHistoryCount = 0
 $Global:__CmdoInitialized = $false
 $Global:__CmdoDebugLog = "$env:USERPROFILE\.cmdo\debug.log"
 
-# Debug logging function
 function Write-CmdoDebug {
 	param($message)
 	$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -140,38 +131,32 @@ function Write-CmdoDebug {
 
 Write-CmdoDebug "=== CMDO Hook Loaded ==="
 
-# Save original prompt if it exists
 if (Test-Path Function:\prompt) {
 	$Global:__CmdoOriginalPrompt = ${function:prompt}
 	Write-CmdoDebug "Original prompt saved"
 }
 
 function Global:prompt {
-	# Capture the exit code FIRST before any other commands
 	$cmdoExitCode = $LASTEXITCODE
 	if ($null -eq $cmdoExitCode) { $cmdoExitCode = 0 }
-	
-	# Get current history count
+
 	$currentHistoryCount = (Get-History -ErrorAction SilentlyContinue | Measure-Object).Count
-	
+
 	Write-CmdoDebug "Prompt called - HistoryCount: $currentHistoryCount, LastCount: $Global:__CmdoLastHistoryCount, ExitCode: $cmdoExitCode"
-	
-	# Skip logging on first prompt (initialization)
+
 	if (-not $Global:__CmdoInitialized) {
 		$Global:__CmdoInitialized = $true
 		$Global:__CmdoLastHistoryCount = $currentHistoryCount
 		Write-CmdoDebug "Initialized - skipping first prompt"
 	}
-	# Log if a new command was executed
 	elseif ($currentHistoryCount -gt $Global:__CmdoLastHistoryCount) {
 		$lastEntry = Get-History -Count 1 -ErrorAction SilentlyContinue
 		if ($lastEntry) {
 			$cmdoCommand = $lastEntry.CommandLine
 			$cmdoDir = $PWD.Path
-			
+
 			Write-CmdoDebug "Logging command: $cmdoCommand (exit: $cmdoExitCode, dir: $cmdoDir)"
-			
-			# Call cmdo log directly (synchronous for debugging)
+
 			try {
 				& "%s" log --command "$cmdoCommand" --exit-code $cmdoExitCode --pwd "$cmdoDir" 2>&1 | Out-File -Append -FilePath $Global:__CmdoDebugLog
 				Write-CmdoDebug "Log command completed"
@@ -185,11 +170,9 @@ function Global:prompt {
 	} else {
 		Write-CmdoDebug "No new commands to log"
 	}
-	
-	# Restore LASTEXITCODE for user scripts
+
 	$global:LASTEXITCODE = $cmdoExitCode
 
-	# Call original prompt if it exists
 	if ($Global:__CmdoOriginalPrompt) {
 		& $Global:__CmdoOriginalPrompt
 	} else {
@@ -197,23 +180,22 @@ function Global:prompt {
 	}
 }
 
-# CMDO Autosuggestion Hook
+# CMDO Inline Suggestion Hook — Tab press par terminal me hi list aayegi
 if (Get-Module -ListAvailable -Name PSReadLine) {
 	Set-PSReadLineKeyHandler -Key Tab -ScriptBlock {
 		$line = $null
 		$cursor = $null
 		[Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+
 		if ($line.Length -ge 3) {
-			$dir = $PWD.Path
-			$suggestions = & "%s" completions --query "$line" --dir "$dir" 2>$null
-			if ($suggestions) {
-				$selected = $suggestions | Out-GridView -Title "CMDO Suggestions" -OutputMode Single
-				if ($selected) {
-					[Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
-					[Microsoft.PowerShell.PSConsoleReadLine]::Insert($selected)
-				}
+			# cmdo suggest chalao — TUI terminal me inline render hogi
+			$selected = & "%s" suggest $line 2>$null
+			if ($selected -and $selected.Trim() -ne "") {
+				[Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+				[Microsoft.PowerShell.PSConsoleReadLine]::Insert($selected.Trim())
 			}
 		} else {
+			# 3 se kam characters — normal tab completion
 			[Microsoft.PowerShell.PSConsoleReadLine]::TabCompleteNext()
 		}
 	}
@@ -255,14 +237,14 @@ if [[ ! "$PROMPT_COMMAND" =~ "__cmdo_capture_exit" ]]; then
 	PROMPT_COMMAND="__cmdo_capture_exit; __cmdo_log${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 fi
 
-# CMDO Autosuggestion
+# CMDO Inline Suggestion
 function __cmdo_suggest() {
 	local query="${READLINE_LINE}"
 	if [ "${#query}" -lt 3 ]; then
 		return
 	fi
 	local selected
-	selected=$("%s" completions --query "$query" --dir "$(pwd)" 2>/dev/null | fzf --height 40%% --reverse --prompt="CMDO> " --query="$query")
+	selected=$("%s" suggest "$query" 2>/dev/null)
 	if [ -n "$selected" ]; then
 		READLINE_LINE="$selected"
 		READLINE_POINT=${#READLINE_LINE}
@@ -301,7 +283,7 @@ autoload -Uz add-zsh-hook
 add-zsh-hook preexec __cmdo_preexec
 add-zsh-hook precmd __cmdo_precmd
 
-# CMDO Autosuggestion
+# CMDO Inline Suggestion
 function __cmdo_suggest() {
 	local query="$BUFFER"
 	if [ "${#query}" -lt 3 ]; then
@@ -309,7 +291,7 @@ function __cmdo_suggest() {
 		return
 	fi
 	local selected
-	selected=$("%s" completions --query "$query" --dir "$(pwd)" 2>/dev/null | fzf --height 40%% --reverse --prompt="CMDO> " --query="$query")
+	selected=$("%s" suggest "$query" 2>/dev/null)
 	if [ -n "$selected" ]; then
 		BUFFER="$selected"
 		CURSOR=${#BUFFER}
@@ -330,13 +312,13 @@ function __cmdo_log --on-event fish_postexec
 	"%s" log --command "$argv[1]" --exit-code $exit_code --pwd "$current_dir" 2>/dev/null
 end
 
-# CMDO Autosuggestion
+# CMDO Inline Suggestion
 function __cmdo_suggest
 	set -l query (commandline)
 	if test (string length -- $query) -lt 3
 		return
 	end
-	set -l selected ("%s" completions --query "$query" --dir (pwd) 2>/dev/null | fzf --height 40%% --reverse --prompt="CMDO> " --query="$query")
+	set -l selected ("%s" suggest "$query" 2>/dev/null)
 	if test -n "$selected"
 		commandline -- $selected
 	end
@@ -469,14 +451,12 @@ func getInstalledBinaryPath() (string, error) {
 func findMacOSShells() []string {
 	var foundShells []string
 
-	// Current user shell
 	userShell := os.Getenv("SHELL")
 	if userShell != "" {
 		foundShells = append(foundShells, userShell)
 		fmt.Printf("✓ Found current shell: %s\n", userShell)
 	}
 
-	// Common shell locations
 	commonShells := []string{
 		"/bin/zsh",
 		"/bin/bash",
@@ -490,7 +470,6 @@ func findMacOSShells() []string {
 
 	for _, shell := range commonShells {
 		if fileExists(shell) {
-			// Avoid duplicates
 			isDuplicate := false
 			for _, existing := range foundShells {
 				if existing == shell {
@@ -539,14 +518,12 @@ var setupCmd = &cobra.Command{
 
 		switch currentOS {
 		case "windows":
-			// Windows shell detection (existing code)
 			gitBashPath := "C:\\Program Files\\Git\\bin\\bash.exe"
 			if _, err := os.Stat(gitBashPath); err == nil {
 				foundShells = append(foundShells, gitBashPath)
 				fmt.Println("✓ Found Git Bash:", gitBashPath)
 			}
 
-			// PowerShell Core (pwsh) detection
 			whereCmd := exec.Command("where", "pwsh")
 			output, err := whereCmd.Output()
 			if err == nil {
@@ -560,7 +537,6 @@ var setupCmd = &cobra.Command{
 				}
 			}
 
-			// Windows PowerShell detection
 			wherePSCmd := exec.Command("where", "powershell")
 			psOutput, psErr := wherePSCmd.Output()
 			if psErr == nil {
@@ -568,7 +544,6 @@ var setupCmd = &cobra.Command{
 				for _, path := range paths {
 					path = strings.TrimSpace(path)
 					if path != "" {
-						// Avoid duplicates
 						isDuplicate := false
 						for _, existing := range foundShells {
 							if existing == path {
@@ -584,7 +559,6 @@ var setupCmd = &cobra.Command{
 				}
 			}
 
-			// CMD detection
 			cmdPath := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
 			if _, err := os.Stat(cmdPath); err == nil {
 				foundShells = append(foundShells, cmdPath)
@@ -631,7 +605,7 @@ var setupCmd = &cobra.Command{
 			fmt.Println("  2. For Bash: source ~/.bashrc")
 			fmt.Println("  3. For PowerShell: . $PROFILE")
 		}
-		fmt.Println("\n Test it: Run any command and check 'cmdo serve'")
+		fmt.Println("\n Test it: Type 3+ characters and press Tab!")
 	},
 }
 

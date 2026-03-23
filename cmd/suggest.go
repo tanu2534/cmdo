@@ -49,7 +49,8 @@ func (m suggestModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, tea.Quit
-		case "enter":
+		case "enter", "tab":
+			// Tab ya Enter dono se select ho
 			if len(m.filtered) > 0 {
 				m.chosen = m.filtered[m.cursor]
 			}
@@ -62,12 +63,6 @@ func (m suggestModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
 			}
-		case "tab":
-			// Tab bhi select kare — same as enter
-			if len(m.filtered) > 0 {
-				m.chosen = m.filtered[m.cursor]
-			}
-			return m, tea.Quit
 		}
 	}
 
@@ -149,15 +144,16 @@ var suggestCmd = &cobra.Command{
 		}
 
 		m := newSuggestModel(cmds, initial)
-		p := tea.NewProgram(m, tea.WithAltScreen())
+
+		// AltScreen NAHI — terminal me inline render hoga
+		p := tea.NewProgram(m)
 		result, err := p.Run()
 		if err != nil {
-			fmt.Println(err)
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 
-		// Selected command stdout pe print karo
-		// PowerShell hook isse capture karke buffer me daalega
+		// stdout pe print — PowerShell hook capture karega
 		if sm, ok := result.(suggestModel); ok && sm.chosen != "" {
 			fmt.Print(sm.chosen)
 		}
