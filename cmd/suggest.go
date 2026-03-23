@@ -62,6 +62,12 @@ func (m suggestModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
 			}
+		case "tab":
+			// Tab bhi select kare — same as enter
+			if len(m.filtered) > 0 {
+				m.chosen = m.filtered[m.cursor]
+			}
+			return m, tea.Quit
 		}
 	}
 
@@ -101,13 +107,13 @@ func (m suggestModel) View() string {
 			if i == m.cursor {
 				b.WriteString(suggHighlight.Render(line) + "\n")
 			} else {
-				b.WriteString(line + "\n")
+				b.WriteString(suggMuted.Render(line) + "\n")
 			}
 		}
 	}
 
 	b.WriteString(strings.Repeat("─", 60) + "\n")
-	b.WriteString(suggMuted.Render("↑↓ navigate  enter select  esc quit"))
+	b.WriteString(suggMuted.Render("↑↓ navigate  tab/enter select  esc quit"))
 	return b.String()
 }
 
@@ -150,8 +156,10 @@ var suggestCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Selected command stdout pe print karo
+		// PowerShell hook isse capture karke buffer me daalega
 		if sm, ok := result.(suggestModel); ok && sm.chosen != "" {
-			fmt.Println(sm.chosen)
+			fmt.Print(sm.chosen)
 		}
 	},
 }
